@@ -20,6 +20,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Stamp version
+        shell: pwsh
+        run: (Get-Content Version.cs) -replace '"dev"', '"1.${{ github.run_number }}"' | Set-Content Version.cs
+
       - name: Tests
         shell: cmd
         run: test.cmd

@@ -25,6 +25,8 @@ namespace PCTune
             Run("restore leaves originals the plugin no longer accepts", RestoreSkipsIncompatible);
             Run("a concurrent profile change is never overwritten", ConcurrentChangeProtected);
             Run("a running client blocks the write", RunningClientBlocks);
+            Run("updates only to a strictly newer release", UpdateVersionCompare);
+            Run("an update must match both GitHub's digest and SHA256SUMS", UpdateVerification);
             Console.WriteLine(failed == 0 ? "ALL TESTS PASSED" : failed + " TEST(S) FAILED");
             return failed == 0 ? 0 : 1;
         }
@@ -151,6 +153,26 @@ namespace PCTune
                 () => { File.WriteAllText(f, external); return false; });
             Assert(!ok, "commit reported success over a concurrent change");
             Assert(File.ReadAllText(f) == external, "concurrent change overwritten");
+        }
+
+        static void UpdateVersionCompare()
+        {
+            Assert(Updater.Newer("v1.10", "1.9"), "1.10 not newer than 1.9");
+            Assert(!Updater.Newer("v1.2", "1.2"), "same version treated as newer");
+            Assert(!Updater.Newer("v1.1", "1.2"), "older version treated as newer");
+            Assert(!Updater.Newer("v1.3", "dev"), "dev build would self-update");
+            Assert(!Updater.Newer("nightly", "1.2"), "unparsable tag treated as newer");
+        }
+
+        static void UpdateVerification()
+        {
+            byte[] exe = { 1, 2, 3 };
+            const string hash = "039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81";
+            string sums = hash + "  PC-Tune.exe\r\n";
+            Assert(Updater.Verified(exe, "sha256:" + hash, sums), "matching update rejected");
+            Assert(!Updater.Verified(exe, "sha256:" + new string('0', 64), sums), "wrong GitHub digest accepted");
+            Assert(!Updater.Verified(exe, "sha256:" + hash, new string('0', 64) + "  PC-Tune.exe\n"), "wrong SHA256SUMS accepted");
+            Assert(!Updater.Verified(exe, "sha256:" + hash, hash + "  Other.exe\n"), "missing SHA256SUMS line accepted");
         }
 
         static void RunningClientBlocks()

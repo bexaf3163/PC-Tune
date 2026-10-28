@@ -38,7 +38,7 @@ namespace PCTune
 
         public Shell(bool isStartup = false)
         {
-            Text = "PC-Tune";
+            Text = "PC-Tune v" + AppInfo.Version;
             var wa = Screen.PrimaryScreen.WorkingArea;
             Size = new Size(Math.Min(Ui.D(960), wa.Width - Ui.D(40)),
                             Math.Min(Ui.D(640), wa.Height - Ui.D(40)));
@@ -71,7 +71,7 @@ namespace PCTune
             side.Controls.Add(brand);
             var sub = new Label
             {
-                Text = "system utility",
+                Text = "system utility  ·  v" + AppInfo.Version,
                 Font = new Font(Ui.Tiny, 8.25f),
                 ForeColor = Ui.Dim,
                 AutoSize = true,

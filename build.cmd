@@ -10,6 +10,6 @@ if not exist "%CSC%" (
     /r:System.dll /r:System.Core.dll /r:System.Drawing.dll ^
     /r:System.Windows.Forms.dll /r:System.Management.dll ^
     /r:System.ServiceProcess.dll ^
-    /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll *.cs
+    /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll /r:System.Web.Extensions.dll *.cs
 if errorlevel 1 exit /b %errorlevel%
 echo [OK] Built portable executable: %~dp0PC-Tune.exe
