@@ -1,0 +1,8 @@
+PC-Tune.exe
+PC-Tune.old*.exe
+*.log
+*.bak
+.claude/
+dist/
+*.zip
+SHA256SUMS.txt

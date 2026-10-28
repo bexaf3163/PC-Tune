@@ -1,0 +1,51 @@
+# Every push to main builds the portable exe on Windows and publishes it as a release.
+name: Portable build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: portable-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        shell: cmd
+        run: build.cmd
+
+      - name: Verify and package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Fails if the output is not a loadable .NET assembly.
+          [void][Reflection.AssemblyName]::GetAssemblyName((Resolve-Path PC-Tune.exe))
+          $tag = "v1.${{ github.run_number }}"
+          New-Item -ItemType Directory dist | Out-Null
+          Copy-Item PC-Tune.exe, PC-Tune.exe.config, PC-Tune.ico dist
+          Compress-Archive dist/* "PC-Tune-$tag-portable.zip"
+          (Get-FileHash PC-Tune.exe -Algorithm SHA256).Hash.ToLower() + "  PC-Tune.exe" | Out-File SHA256SUMS.txt -Encoding ascii
+          "TAG=$tag" >> $env:GITHUB_ENV
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PC-Tune-portable
+          path: PC-Tune-*-portable.zip
+
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create $env:TAG "PC-Tune-$env:TAG-portable.zip" PC-Tune.exe SHA256SUMS.txt
+          --target $env:GITHUB_SHA --title "PC-Tune $env:TAG" --notes "Portable build of $env:GITHUB_SHA"
