@@ -6,3 +6,4 @@ PC-Tune.old*.exe
 dist/
 *.zip
 SHA256SUMS.txt
+tests/out/

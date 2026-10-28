@@ -70,7 +70,7 @@ namespace PCTune
             new[] { "hd.anisotropicFilteringLevel", "16" }, new[] { "hd.textureResolution", "RES_256" },
             new[] { "hd.groundTextures", "true" }, new[] { "hd.objectTextures", "true" },
             new[] { "hd.groundBlending", "true" }, new[] { "hd.normalMapping", "true" },
-            new[] { "hd.environmentalLighting", "true" }, new[] { "hd.tiledLighting", "true" },
+            // tiledLighting is left to 117 HD: it became a DEFAULT/ON/OFF enum, and environmentalLighting was removed.
             new[] { "hd.underwaterCaustics", "true" }, new[] { "hd.sceneResolutionScale", "100" },
             new[] { "hd.expandShadowDraw", "false" },
             // One frame limiter: the 117 HD cap. Vsync off so it cannot fight the cap on a 100+ Hz panel.
@@ -95,41 +95,13 @@ namespace PCTune
 
         static bool HdMatches(string c, int rung, string fps, bool car)
         {
-            if (!HasHd(c)) return false;
+            if (!HasHd(c) || RlSchema.For("hd") == null) return false;
             foreach (var kv in HdPlan(rung, fps))
             {
-                if ((car && CarValue(kv[0]) != null) || !HdSupports(kv[0], kv[1])) continue;
+                if ((car && CarValue(kv[0]) != null) || RlSchema.Check(kv[0], kv[1]) != null) continue;
                 if (!string.Equals(Prop(c, kv[0]), kv[1], StringComparison.OrdinalIgnoreCase)) return false;
             }
             return true;
-        }
-
-        // Config class bytes of the installed 117 HD jar, so only keys and enum values this
-        // plugin version knows are written. shortcut: cached per PC-Tune run, re-read if the plugin updates mid-session.
-        static string hdJarText;
-        static bool HdSupports(string key, string val)
-        {
-            if (hdJarText == null)
-            {
-                hdJarText = "";
-                try
-                {
-                    FileInfo jar = null;
-                    foreach (var f in new DirectoryInfo(Path.Combine(Home, @".runelite\plugins")).GetFiles("117hd*.jar"))
-                        if (jar == null || f.LastWriteTimeUtc > jar.LastWriteTimeUtc) jar = f;
-                    var sb = new StringBuilder();
-                    if (jar != null)
-                        using (var z = ZipFile.OpenRead(jar.FullName))
-                            foreach (var e in z.Entries)
-                                if (e.FullName.StartsWith("rs117/hd/config/") || e.FullName.StartsWith("rs117/hd/HdPluginConfig"))
-                                    using (var r = new StreamReader(e.Open(), Encoding.GetEncoding(28591))) sb.Append(r.ReadToEnd());
-                    hdJarText = sb.ToString();
-                }
-                catch { }
-            }
-            if (hdJarText.Length == 0) return true;   // jar unreadable: these are 117 HD's documented keys
-            if (hdJarText.IndexOf(key.Substring(key.IndexOf('.') + 1), StringComparison.Ordinal) < 0) return false;
-            return val == "true" || val == "false" || char.IsDigit(val[0]) || hdJarText.IndexOf(val, StringComparison.Ordinal) >= 0;
         }
 
         static double DedicatedVramGb()
@@ -517,6 +489,10 @@ namespace PCTune
                              : (g.Done ? "" : "Optimize applies ") + RungNames[rung] + " for " + HwInfo.GpuName + " @ " + OsrsWinW + "x" + OsrsWinH +
                                " window  ·  " + RungSummary(rung) + (heapMb > 0 ? "  ·  " + heapMb + " MB JVM" : "") +
                                (verdict.Length > 0 ? "  ·  last test: " + verdict : "");
+                int skipped = 0;
+                foreach (var kv in HdPlan(rung, wantFps)) if (RlSchema.Check(kv[0], kv[1]) != null) skipped++;
+                if (RlSchema.For("hd") == null) g.Plan = "117 HD settings could not be read from the installed plugin - Optimize leaves them unchanged";
+                else if (skipped > 0) g.Plan += "  ·  " + skipped + " preset settings not offered by this 117 HD version (left unchanged)";
             }
             else if (mode == "gpu")
             {
@@ -710,24 +686,69 @@ namespace PCTune
             catch { }
         }
 
-        static void RememberKey(string profile, string key)
+        // Records each key's value before PC-Tune first changes it. false = no backup, so nothing may change.
+        static bool RememberKeys(string profile, List<string> keys)
         {
             try
             {
                 string f = KeysFile(profile);
                 var had = File.Exists(f) ? new List<string>(File.ReadAllLines(f)) : new List<string>();
-                foreach (string l in had) if (l.StartsWith(key + "=")) return;
-                string v = Prop(profile, key);
-                had.Add(key + "=" + (v == "?" ? "__MISSING__" : v));
-                File.WriteAllLines(f, had.ToArray(), new UTF8Encoding(false));
+                int n = had.Count;
+                foreach (string key in keys)
+                {
+                    if (had.Exists(l => l.StartsWith(key + "="))) continue;
+                    string v = Prop(profile, key);
+                    had.Add(key + "=" + (v == "?" ? RlProfile.Missing : v));
+                }
+                if (had.Count != n) File.WriteAllLines(f, had.ToArray(), new UTF8Encoding(false));
+                return true;
             }
-            catch { }
+            catch { return false; }
         }
 
-        static void SetKey(string profile, string key, string val, Action<string> log)
+        // Checked right before every profile write; tests replace it.
+        internal static Func<bool> ClientBusy = () => OsrsPids().Count > 0;
+
+        static bool SetKey(string profile, string key, string val, Action<string> log)
         {
-            RememberKey(profile, key);
-            Prop(profile, key, val, log);
+            return SetKeys(profile, new List<string[]> { new[] { key, val } }, log);
+        }
+
+        // Writes only values the installed plugin version accepts, backs up the originals, then commits
+        // all edits in one atomic replacement.
+        internal static bool SetKeys(string profile, List<string[]> edits, Action<string> log)
+        {
+            var ok = new List<string[]>();
+            var keys = new List<string>();
+            foreach (var kv in edits)
+            {
+                string why = RlSchema.Check(kv[0], kv[1]);
+                if (why == null) { ok.Add(kv); keys.Add(kv[0]); }
+                else log("  [ ] " + kv[0] + "=" + kv[1] + " skipped: " + why);
+            }
+            if (ok.Count == 0) return true;
+            if (!RememberKeys(profile, keys)) { log("  [x] current values could not be backed up - profile left unchanged"); return false; }
+            return RlProfile.Commit(profile, ok, log, ClientBusy);
+        }
+
+        // Puts back the values recorded before PC-Tune changed them; other settings stay as they are.
+        // An original the installed plugin no longer accepts is left alone and reported.
+        internal static bool RestoreKeys(string profile, Action<string> log)
+        {
+            string kf = KeysFile(profile);
+            if (!File.Exists(kf)) return true;
+            var edits = new List<string[]>();
+            foreach (string l in File.ReadAllLines(kf))
+            {
+                int eq = l.IndexOf('=');
+                if (eq <= 0) continue;
+                string key = l.Substring(0, eq), val = l.Substring(eq + 1), why = RlSchema.Check(key, val);
+                if (why == null) edits.Add(new[] { key, val });
+                else log("  [ ] " + key + "=" + val + " not restored: " + why);
+            }
+            if (!RlProfile.Commit(profile, edits, log, ClientBusy)) return false;
+            File.Delete(kf);
+            return true;
         }
 
         public static void SetOsrsKey(string profile, string key, string val, Action<string> log)
@@ -1011,14 +1032,17 @@ namespace PCTune
                 string f = KeysFile(c);
                 if (!File.Exists(f)) return;
                 var keep = new List<string>();
+                var edits = new List<string[]>();
                 foreach (string l in File.ReadAllLines(f))
                 {
                     int eq = l.IndexOf('=');
                     string k = eq > 0 ? l.Substring(0, eq) : "";
                     string car = CarValue(k);
                     if (car == null) { keep.Add(l); continue; }
-                    if (Prop(c, k) == car) Prop(c, k, l.Substring(eq + 1), log);
+                    string orig = l.Substring(eq + 1);
+                    if (Prop(c, k) == car && RlSchema.Check(k, orig) == null) edits.Add(new[] { k, orig });
                 }
+                if (!RlProfile.Commit(c, edits, log, ClientBusy)) return;
                 if (keep.Count == 0) File.Delete(f);
                 else File.WriteAllLines(f, keep.ToArray());
             }
@@ -1110,17 +1134,21 @@ namespace PCTune
                 OptRuneLiteLauncher(g.Exe, log);
                 FitWindow(c, log);
                 var plan = HdPlan(rung, fps);
-                foreach (var kv in plan)
+                string hdJar = RlSchema.JarFor("hd");
+                if (RlSchema.For("hd") == null)
                 {
-                    if (HdSupports(kv[0], kv[1])) SetKey(c, kv[0], kv[1], log);
-                    else log("  [ ] " + kv[0] + "=" + kv[1] + " skipped (not offered by the installed 117 HD)");
+                    log("  [!] the installed 117 HD settings could not be read" + (hdJar == null ? " (plugin jar not identified)" : "") +
+                        " - 117 HD settings left unchanged");
+                    return;
                 }
+                log("  [ ] 117 HD settings checked against " + Path.GetFileName(hdJar));
+                if (!SetKeys(c, plan, log)) return;
                 if (car) ApplyCarKeys(c, mode, log);
                 // Read the profile back: success means the file holds the values, not that a write ran.
                 int ok = 0, total = 0;
                 foreach (var kv in plan)
                 {
-                    if (!HdSupports(kv[0], kv[1]) || (car && CarValue(kv[0]) != null)) continue;
+                    if (RlSchema.Check(kv[0], kv[1]) != null || (car && CarValue(kv[0]) != null)) continue;
                     total++;
                     if (string.Equals(Prop(c, kv[0]), kv[1], StringComparison.OrdinalIgnoreCase)) ok++;
                     else log("  [x] " + kv[0] + " did not persist");
@@ -1163,13 +1191,10 @@ namespace PCTune
                 {
                     try
                     {
-                        foreach (string l in File.ReadAllLines(kf))
-                        {
-                            int eq = l.IndexOf('=');
-                            if (eq > 0) Prop(g.Config, l.Substring(0, eq), l.Substring(eq + 1), log);
-                        }
-                        File.Delete(kf);
-                        log("  [+] values changed by PC-Tune restored; other plugin settings untouched");
+                        if (RestoreKeys(g.Config, log))
+                            log("  [+] values changed by PC-Tune restored; other plugin settings untouched");
+                        else
+                            log("  [!] RuneLite settings not restored - close RuneLite and press Restore again");
                         // Only the heap value comes back: RuneLite updates rewrite the rest of config.json.
                         string lc = RuneLiteLauncherConfig(g.Exe);
                         if (lc.Length > 0 && File.Exists(lc + ".pctune.bak"))
@@ -1319,48 +1344,6 @@ namespace PCTune
             }
             catch { }
             return "?";
-        }
-
-        static void Prop(string file, string key, string val, Action<string> log)
-        {
-            try
-            {
-                var lines = new List<string>(File.ReadAllLines(file));
-                if (val == "__MISSING__")
-                {
-                    for (int i = lines.Count - 1; i >= 0; i--)
-                    {
-                        int eq = lines[i].IndexOf('=');
-                        if (eq > 0 && string.Equals(lines[i].Substring(0, eq).Trim(), key, StringComparison.Ordinal))
-                        {
-                            lines.RemoveAt(i);
-                            if (log != null) log("  [+] " + key + ": removed (restored default)");
-                        }
-                    }
-                    File.WriteAllLines(file, lines.ToArray());
-                    return;
-                }
-                bool hit = false;
-                for (int i = 0; i < lines.Count; i++)
-                {
-                    int eq = lines[i].IndexOf('=');
-                    if (eq <= 0) continue;
-                    if (!string.Equals(lines[i].Substring(0, eq).Trim(), key, StringComparison.Ordinal)) continue;
-                    string was = lines[i].Substring(eq + 1).Trim();
-                    if (string.Equals(was, val, StringComparison.Ordinal)) return;
-                    lines[i] = key + "=" + val;
-                    if (log != null) log("  [+] " + key + ": " + was + " -> " + val);
-                    hit = true;
-                    break;
-                }
-                if (!hit)
-                {
-                    lines.Add(key + "=" + val);
-                    if (log != null) log("  [+] " + key + " = " + val);
-                }
-                File.WriteAllLines(file, lines.ToArray());
-            }
-            catch (Exception ex) { if (log != null) log("  [x] " + key + ": " + ex.Message); }
         }
 
         static bool Eq(string a, string b)
