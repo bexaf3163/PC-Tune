@@ -328,6 +328,7 @@ namespace PCTune
         // display/sleep lock, which SetThreadExecutionState ties to the calling thread and so was lost when
         // the short-lived job thread that ran Enter() ended.
         static System.Threading.Thread upkeep;
+        static DateTime lastTrim;
         static readonly System.Threading.AutoResetEvent upkeepWake = new System.Threading.AutoResetEvent(false);
 
         public static void StartUpkeep()
@@ -367,8 +368,11 @@ namespace PCTune
             var live = BackgroundApps(skip, false, false);
             if (live.Count > 0) Ram.CloseMarked(live, null);
 
-            if (Ram.State().Percent >= 75)
+            // Trimming makes background processes fault their pages back in, so it runs only under real
+            // pressure and at most every 10 minutes; trimming every minute at 75% would itself cause hitches.
+            if (Ram.State().Percent >= 85 && DateTime.UtcNow - lastTrim > TimeSpan.FromMinutes(10))
             {
+                lastTrim = DateTime.UtcNow;
                 var r = Ram.Trim();
                 Sys.ToFile(string.Format("GAME: upkeep trimmed memory, +{0:N0} MB available", r.FreedMb));
             }

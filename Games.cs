@@ -940,7 +940,10 @@ namespace PCTune
                             try
                             {
                                 // RuneLite runs windowed, so DWM must still compose its frames: Above Normal, not High.
-                                p.PriorityClass = string.Equals(procName, "runelite", StringComparison.OrdinalIgnoreCase)
+                                // javaw.exe is the RuneLite client under OSRS Path; other Java programs are left alone.
+                                bool javaw = string.Equals(procName, "javaw", StringComparison.OrdinalIgnoreCase);
+                                if (javaw && !OsrsPids().Contains(p.Id)) continue;
+                                p.PriorityClass = javaw || string.Equals(procName, "runelite", StringComparison.OrdinalIgnoreCase)
                                     ? ProcessPriorityClass.AboveNormal : ProcessPriorityClass.High;
                                 p.PriorityBoostEnabled = true;
                                 Sys.DisableProcessEcoQoS(p);
