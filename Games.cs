@@ -54,7 +54,8 @@ namespace PCTune
         // transparency, DETAILED shadows, 4096 shadow maps, far draw distance, MSAA level).
         // Textures, normal maps, ground blending, lighting and water stay on every rung. Measured on Iris Xe at the
         // Grand Exchange (2026-10-29, PresentMon): shadows cost 4-7 ms of GPU per frame, so Efficient drops them and
-        // renders the scene at 85% with AF 8x instead of cutting draw distance; that holds 60 FPS with no frame over 25 ms.
+        // renders the scene at 85% instead of cutting draw distance; that holds 60 FPS standing and during a 360-degree
+        // camera turn. AF 16x measured free, so it stays.
         static readonly string[] RungNames = { "Ultra", "Very High", "High", "Balanced", "Efficient", "Light" };
         static readonly string[] RungKeys = {
             "hd.antiAliasingMode", "hd.shadowMode", "hd.shadowResolution", "hd.shadowDistance", "hd.enableShadowTransparency",
@@ -66,7 +67,7 @@ namespace PCTune
             new[] { "MSAA_4",   "DETAILED", "RES_4096", "DISTANCE_50", "true",  "80", "60", "MANY", "true",  "true",  "false", "true",  "true",  "100", "16" },
             new[] { "MSAA_4",   "FAST",     "RES_2048", "DISTANCE_50", "false", "70", "60", "SOME", "true",  "true",  "false", "true",  "true",  "100", "16" },
             new[] { "MSAA_2",   "FAST",     "RES_2048", "DISTANCE_40", "false", "60", "50", "SOME", "false", "true",  "false", "false", "true",  "100", "16" },
-            new[] { "DISABLED", "OFF",      "RES_2048", "DISTANCE_30", "false", "50", "50", "FEW",  "false", "true",  "false", "false", "true",  "85",  "8" },
+            new[] { "DISABLED", "OFF",      "RES_2048", "DISTANCE_30", "false", "50", "50", "FEW",  "false", "true",  "false", "false", "true",  "85",  "16" },
             new[] { "DISABLED", "OFF",      "RES_1024", "DISTANCE_30", "false", "40", "40", "FEW",  "false", "false", "false", "false", "false", "75",  "4" },
         };
         static readonly string[][] HdFixed = {
