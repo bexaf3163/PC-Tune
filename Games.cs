@@ -52,26 +52,29 @@ namespace PCTune
 
         // Best first. Each step down drops the worst cost/benefit options first (POM, shadow
         // transparency, DETAILED shadows, 4096 shadow maps, far draw distance, MSAA level).
-        // AF 16x, textures, normal maps, ground blending, lighting and water stay on every rung.
+        // Textures, normal maps, ground blending, lighting and water stay on every rung. Measured on Iris Xe at the
+        // Grand Exchange (2026-10-29, PresentMon): shadows cost 4-7 ms of GPU per frame, so Efficient drops them and
+        // renders the scene at 85% with AF 8x instead of cutting draw distance; that holds 60 FPS with no frame over 25 ms.
         static readonly string[] RungNames = { "Ultra", "Very High", "High", "Balanced", "Efficient", "Light" };
         static readonly string[] RungKeys = {
             "hd.antiAliasingMode", "hd.shadowMode", "hd.shadowResolution", "hd.shadowDistance", "hd.enableShadowTransparency",
             "hd.drawDistance", "hd.detailDistance", "hd.dynamicLights", "hd.npcLights", "hd.projectileLights",
-            "hd.parallaxOcclusionMappingToggle", "hd.characterDisplacement", "hd.windDisplacement" };
+            "hd.parallaxOcclusionMappingToggle", "hd.characterDisplacement", "hd.windDisplacement",
+            "hd.sceneResolutionScale", "hd.anisotropicFilteringLevel" };
         static readonly string[][] Rungs = {
-            new[] { "MSAA_8",   "DETAILED", "RES_4096", "DISTANCE_60", "true",  "90", "70", "MANY", "true",  "true",  "true",  "true",  "true" },
-            new[] { "MSAA_4",   "DETAILED", "RES_4096", "DISTANCE_50", "true",  "80", "60", "MANY", "true",  "true",  "false", "true",  "true" },
-            new[] { "MSAA_4",   "FAST",     "RES_2048", "DISTANCE_50", "false", "70", "60", "SOME", "true",  "true",  "false", "true",  "true" },
-            new[] { "MSAA_2",   "FAST",     "RES_2048", "DISTANCE_40", "false", "60", "50", "SOME", "false", "true",  "false", "false", "true" },
-            new[] { "DISABLED", "FAST",     "RES_2048", "DISTANCE_30", "false", "50", "50", "SOME", "false", "true",  "false", "false", "true" },
-            new[] { "DISABLED", "FAST",     "RES_1024", "DISTANCE_30", "false", "40", "40", "FEW",  "false", "false", "false", "false", "false" },
+            new[] { "MSAA_8",   "DETAILED", "RES_4096", "DISTANCE_60", "true",  "90", "70", "MANY", "true",  "true",  "true",  "true",  "true",  "100", "16" },
+            new[] { "MSAA_4",   "DETAILED", "RES_4096", "DISTANCE_50", "true",  "80", "60", "MANY", "true",  "true",  "false", "true",  "true",  "100", "16" },
+            new[] { "MSAA_4",   "FAST",     "RES_2048", "DISTANCE_50", "false", "70", "60", "SOME", "true",  "true",  "false", "true",  "true",  "100", "16" },
+            new[] { "MSAA_2",   "FAST",     "RES_2048", "DISTANCE_40", "false", "60", "50", "SOME", "false", "true",  "false", "false", "true",  "100", "16" },
+            new[] { "DISABLED", "OFF",      "RES_2048", "DISTANCE_30", "false", "50", "50", "FEW",  "false", "true",  "false", "false", "true",  "85",  "8" },
+            new[] { "DISABLED", "OFF",      "RES_1024", "DISTANCE_30", "false", "40", "40", "FEW",  "false", "false", "false", "false", "false", "75",  "4" },
         };
         static readonly string[][] HdFixed = {
-            new[] { "hd.anisotropicFilteringLevel", "16" }, new[] { "hd.textureResolution", "RES_256" },
+            new[] { "hd.textureResolution", "RES_256" },
             new[] { "hd.groundTextures", "true" }, new[] { "hd.objectTextures", "true" },
             new[] { "hd.groundBlending", "true" }, new[] { "hd.normalMapping", "true" },
             // tiledLighting is left to 117 HD: it became a DEFAULT/ON/OFF enum, and environmentalLighting was removed.
-            new[] { "hd.underwaterCaustics", "true" }, new[] { "hd.sceneResolutionScale", "100" },
+            new[] { "hd.underwaterCaustics", "true" },
             new[] { "hd.expandShadowDraw", "false" },
             // One frame limiter: the 117 HD cap. Vsync off so it cannot fight the cap on a 100+ Hz panel.
             new[] { "hd.unlockFps", "true" }, new[] { "hd.vsyncMode", "OFF" },
@@ -89,8 +92,9 @@ namespace PCTune
         static string RungSummary(int rung)
         {
             string[] v = Rungs[rung];
-            return "AA " + Human(v[0]) + ", " + Human(v[1]) + " " + v[2].Replace("RES_", "") + " shadows @" + v[3].Replace("DISTANCE_", "") +
-                   ", draw " + v[5] + ", " + v[7].ToLowerInvariant() + " lights, AF 16x";
+            string shadows = v[1] == "OFF" ? "no shadows" : Human(v[1]) + " " + v[2].Replace("RES_", "") + " shadows @" + v[3].Replace("DISTANCE_", "");
+            return "AA " + Human(v[0]) + ", " + shadows + ", draw " + v[5] + ", " + v[7].ToLowerInvariant() + " lights, AF " + v[14] + "x" +
+                   (v[13] == "100" ? "" : ", scene " + v[13] + "%");
         }
 
         static bool HdMatches(string c, int rung, string fps, bool car)
