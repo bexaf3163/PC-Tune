@@ -163,7 +163,7 @@ namespace PCTune
             else UpdateWidgetButton();
 
             if (GameMode.Active)
-                GameMode.ReassertRuntimeLocks();
+                GameMode.StartUpkeep();
 
             if (Cfg.PerfOnStart && !GameMode.Active)
             {

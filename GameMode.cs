@@ -239,23 +239,7 @@ namespace PCTune
             bool closeBrowsers = Cfg.GameCloseBrowsers;
             bool closeChat = Cfg.GameCloseChat;
 
-            var live = new List<string>();
-            try
-            {
-                foreach (var pr in Process.GetProcesses())
-                {
-                    string n;
-                    try { n = pr.ProcessName; }
-                    catch { try { pr.Dispose(); } catch { } continue; }
-                    try { pr.Dispose(); } catch { }
-                    if (string.IsNullOrEmpty(n)) continue;
-                    if (skip.Contains(n)) continue;
-                    if (!Matches(n, closeBrowsers, closeChat)) continue;
-                    if (ShellOwned(n)) continue;
-                    if (!live.Contains(n)) live.Add(n);
-                }
-            }
-            catch { }
+            var live = BackgroundApps(skip, closeBrowsers, closeChat);
 
             foreach (string extra in Cfg.KillList)
             {
@@ -315,6 +299,79 @@ namespace PCTune
                 log("  [!] RAM usage is above 75%: integrated graphics shares system RAM for VRAM");
 
             log("== Ready for gaming");
+            StartUpkeep();
+        }
+
+        static List<string> BackgroundApps(HashSet<string> skip, bool closeBrowsers, bool closeChat)
+        {
+            var live = new List<string>();
+            try
+            {
+                foreach (var pr in Process.GetProcesses())
+                {
+                    string n;
+                    try { n = pr.ProcessName; }
+                    catch { try { pr.Dispose(); } catch { } continue; }
+                    try { pr.Dispose(); } catch { }
+                    if (string.IsNullOrEmpty(n)) continue;
+                    if (skip.Contains(n)) continue;
+                    if (!Matches(n, closeBrowsers, closeChat)) continue;
+                    if (ShellOwned(n)) continue;
+                    if (!live.Contains(n)) live.Add(n);
+                }
+            }
+            catch { }
+            return live;
+        }
+
+        // While Game Mode is on, a dedicated thread repeats the upkeep once a minute. It also holds the
+        // display/sleep lock, which SetThreadExecutionState ties to the calling thread and so was lost when
+        // the short-lived job thread that ran Enter() ended.
+        static System.Threading.Thread upkeep;
+        static readonly System.Threading.AutoResetEvent upkeepWake = new System.Threading.AutoResetEvent(false);
+
+        public static void StartUpkeep()
+        {
+            lock (upkeepWake)
+            {
+                if (upkeep != null && upkeep.IsAlive) return;
+                upkeepWake.Reset();   // a Leave() with no thread running must not end the next session at once
+                upkeep = new System.Threading.Thread(delegate ()
+                {
+                    ReassertRuntimeLocks();
+                    while (!upkeepWake.WaitOne(60000) && Active)
+                        try { Upkeep(); } catch { }
+                    Sys.SetThreadExecutionState(Sys.ES_CONTINUOUS);
+                }) { IsBackground = true };
+                upkeep.Start();
+            }
+        }
+
+        // Browsers and chat apps are closed only on entry, so apps the player opens during the session stay.
+        static void Upkeep()
+        {
+            ReassertRuntimeLocks();
+            Games.BoostRunningGames(null);
+
+            // Never raise a UAC prompt in the middle of a game: without elevation, services wait for the next entry.
+            var stopped = new List<string>();
+            if (Sys.ElevatedReady) foreach (var s in Svc.List())
+            {
+                if (s.Protected || !string.Equals(s.State, "Running", StringComparison.OrdinalIgnoreCase)) continue;
+                if (Wanted(s.Name, s.Display) && StopSvc(s.Name, Sys.ToFile)) stopped.Add(s.Name);
+            }
+            if (stopped.Count > 0) SaveStopped(stopped);
+
+            var skip = new HashSet<string>(Never, StringComparer.OrdinalIgnoreCase);
+            foreach (string gp in GameProcs()) skip.Add(gp);
+            var live = BackgroundApps(skip, false, false);
+            if (live.Count > 0) Ram.CloseMarked(live, null);
+
+            if (Ram.State().Percent >= 75)
+            {
+                var r = Ram.Trim();
+                Sys.ToFile(string.Format("GAME: upkeep trimmed memory, +{0:N0} MB available", r.FreedMb));
+            }
         }
 
         public static void ReassertRuntimeLocks()
@@ -441,6 +498,7 @@ namespace PCTune
         {
             Sys.SetThreadExecutionState(Sys.ES_CONTINUOUS);
             Sys.SetHighResTimer(false);
+            upkeepWake.Set();
 
             string[] names = null;
             try

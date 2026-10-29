@@ -202,6 +202,11 @@ namespace PCTune
             catch { return ""; }
         }
 
+        public static bool ElevatedReady
+        {
+            get { lock (elevLock) return IsAdmin || (elevPipe != null && elevPipe.IsConnected && elevProc != null && !elevProc.HasExited); }
+        }
+
         static bool EnsureElevatedHelper()
         {
             if (elevPipe != null && elevPipe.IsConnected && elevProc != null && !elevProc.HasExited)
