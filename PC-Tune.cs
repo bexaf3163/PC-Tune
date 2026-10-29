@@ -1651,6 +1651,7 @@ namespace PCTune
                 bool showMain = isStartup ? Cfg.OpenMainOnStartup : true;
                 if (showMain) shell.Show();
                 var ui = SynchronizationContext.Current;
+            Updater.JobRunning = () => shell.IsBusy;
                 Updater.Start(() => GameMode.Active || shell.IsBusy,
                     () => ui.Post(delegate { Tray.Kill(); Sys.CloseElevatedHelper(); ctx.ExitThread(); }, null));
                 Application.Run(ctx);

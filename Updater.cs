@@ -23,8 +23,13 @@ namespace PCTune
         static string Old { get { return Path.Combine(Path.GetDirectoryName(Exe), "PC-Tune.old.exe"); } }
 
         // busy: true while an update must wait. restart: exits this instance after the new one started.
+        static readonly object gate = new object();
+        static Action restartApp;
+        public static Func<bool> JobRunning;
+
         public static void Start(Func<bool> busy, Action restart)
         {
+            restartApp = restart;
             try { File.Delete(Old); } catch { }
             if (AppInfo.Version == "dev") return;   // local builds never replace themselves
             var t = new Thread(delegate ()
@@ -32,7 +37,7 @@ namespace PCTune
                 Thread.Sleep(TimeSpan.FromSeconds(30));
                 while (true)
                 {
-                    try { if (Check() && WaitIdle(busy) && Swap()) { restart(); return; } }
+                    try { string note; bool ok; lock (gate) ok = Check(out note); if (ok && WaitIdle(busy) && Swap(true)) { restart(); return; } }
                     catch (Exception ex) { Sys.ToFile("UPDATE check failed: " + ex.Message); }
                     Thread.Sleep(Every);
                 }
@@ -42,12 +47,33 @@ namespace PCTune
         }
 
         // true when a verified newer exe is staged.
-        static bool Check()
+        // The Settings button: checks at once and installs without waiting for Game Mode to end, since
+        // restarting PC-Tune does not touch a running game. status gets a short result for the button.
+        public static void CheckNow(Action<string> status)
+        {
+            if (AppInfo.Version == "dev") { status("Local build: no updates"); return; }
+            new Thread(delegate ()
+            {
+                try
+                {
+                    status("Checking...");
+                    string note; bool ok;
+                    lock (gate) ok = Check(out note);
+                    if (!ok) { status(note == "up to date" ? "Up to date (v" + AppInfo.Version + ")" : "Skipped: " + note); return; }
+                    if (JobRunning != null && JobRunning()) { status(note + " ready, finish the task first"); return; }
+                    status("Installing " + note + "...");
+                    if (Swap(false) && restartApp != null) restartApp(); else status("Install failed, see log");
+                }
+                catch (Exception ex) { Sys.ToFile("UPDATE check failed: " + ex.Message); status("Check failed, see log"); }
+            }) { IsBackground = true }.Start();
+        }
+
+        static bool Check(out string note)
         {
             ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
             var rel = (Dictionary<string, object>)new JavaScriptSerializer().DeserializeObject(Get(Api, true));
             string tag = rel["tag_name"] as string;
-            if (!Newer(tag, AppInfo.Version)) return false;
+            if (!Newer(tag, AppInfo.Version)) { note = "up to date"; return false; }
             string exeUrl = null, digest = null, sumsUrl = null;
             foreach (Dictionary<string, object> a in (object[])rel["assets"])
             {
@@ -55,17 +81,19 @@ namespace PCTune
                 if (name == "PC-Tune.exe") { exeUrl = a["browser_download_url"] as string; object d; if (a.TryGetValue("digest", out d)) digest = d as string; }
                 else if (name == "SHA256SUMS.txt") sumsUrl = a["browser_download_url"] as string;
             }
-            if (exeUrl == null || digest == null || sumsUrl == null) { Sys.ToFile("UPDATE " + tag + ": release lacks exe, digest or checksums - skipped"); return false; }
+            if (exeUrl == null || digest == null || sumsUrl == null) { Sys.ToFile("UPDATE " + tag + ": release lacks exe, digest or checksums - skipped"); note = "incomplete release"; return false; }
             string sums = Get(sumsUrl, false);
             using (var wc = new WebClient()) { wc.Headers["User-Agent"] = "PC-Tune"; wc.DownloadFile(exeUrl, Staged); }
             if (!Verified(File.ReadAllBytes(Staged), digest, sums))
             {
                 File.Delete(Staged);
                 Sys.ToFile("UPDATE " + tag + ": downloaded exe failed SHA-256 verification - deleted");
+                note = "download failed verification";
                 return false;
             }
             AssemblyName.GetAssemblyName(Staged);   // throws when it is not a .NET executable
             Sys.ToFile("UPDATE " + tag + " downloaded and verified");
+            note = tag;
             return true;
         }
 
@@ -106,7 +134,7 @@ namespace PCTune
         }
 
         // Windows allows renaming a running exe, so the old one moves aside and the new one takes its name.
-        static bool Swap()
+        static bool Swap(bool tray)
         {
             string exe = Exe;
             try
@@ -115,7 +143,7 @@ namespace PCTune
                 File.Move(exe, Old);
                 try { File.Move(Staged, exe); }
                 catch { File.Move(Old, exe); throw; }
-                Process.Start(new ProcessStartInfo(exe, "--after-update " + Process.GetCurrentProcess().Id + " /tray") { UseShellExecute = false });
+                Process.Start(new ProcessStartInfo(exe, "--after-update " + Process.GetCurrentProcess().Id + (tray ? " /tray" : "")) { UseShellExecute = false });
                 Sys.ToFile("UPDATE installed, restarting");
                 return true;
             }

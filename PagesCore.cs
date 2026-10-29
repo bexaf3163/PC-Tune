@@ -799,7 +799,7 @@ namespace PCTune
         readonly Toggle tgAuto, tgWidgetStart, tgMainStart, tgPerf;
         readonly Toggle tgWidget, tgCollapsed;
         readonly Toggle tgClose, tgTray, tgPromo;
-        readonly Btn bResetPos, bExitApp;
+        readonly Btn bResetPos, bExitApp, bUpdate;
         readonly Action<bool> widgetToggle;
         readonly Action onResetWidgetPos;
         readonly Action onExitApp;
@@ -893,6 +893,16 @@ namespace PCTune
             bExitApp = new Btn { Text2 = "Exit PC-Tune", Tone = Ui.Amber, Width = Ui.D(140), Height = Ui.D(30) };
             bExitApp.Click += delegate { if (onExitApp != null) onExitApp(); };
             cWindow.Controls.Add(bExitApp);
+
+            bUpdate = new Btn { Text2 = "Check for updates", Width = Ui.D(260), Height = Ui.D(30) };
+            bUpdate.Click += delegate
+            {
+                Updater.CheckNow(s =>
+                {
+                    try { bUpdate.BeginInvoke((Action)delegate { bUpdate.Text2 = s; bUpdate.Invalidate(); }); } catch { }
+                });
+            };
+            cWindow.Controls.Add(bUpdate);
         }
 
         public override void Refresh2()
@@ -922,6 +932,7 @@ namespace PCTune
 
             bResetPos.Location = new Point(Ui.D(20), Ui.D(164));
             bExitApp.Location = new Point(Ui.D(20), Ui.D(218));
+            bUpdate.Location = new Point(Ui.D(172), Ui.D(218));
         }
 
         static void Place(Panel host, int w, int[] rows)
