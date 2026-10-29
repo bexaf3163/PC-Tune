@@ -353,7 +353,12 @@ namespace PCTune
         public void Quit()
         {
             reallyClose = true;
-            Close();
+            // Started in the tray, the window has no handle: Close() then only disposes it, FormClosed never
+            // fires and the process stays alive with no window or icon.
+            if (IsHandleCreated) { Close(); return; }
+            Dispose();
+            var h = Closed2;
+            if (h != null) h();
         }
 
         protected override void OnDpiChanged(DpiChangedEventArgs e)
