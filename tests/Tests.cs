@@ -19,6 +19,7 @@ namespace PCTune
             Run("boolean true is rejected for an enum setting", BooleanRejectedForEnum);
             Run("valid enum, boolean and ranged int values are accepted", ValidValuesAccepted);
             Run("unknown keys and unidentified plugin versions are skipped", UnknownSkipped);
+            Run("the loaded plugin version is found in a rotated client log", RotatedLogNamesJar);
             Run("preset write skips invalid values and writes the rest", SetKeysSkipsInvalid);
             Run("malformed input leaves the profile byte-for-byte intact", MalformedLeavesFile);
             Run("restore puts back only PC-Tune's keys", RestorePreservesUnrelated);
@@ -86,6 +87,16 @@ namespace PCTune
             Assert(RlSchema.Check("hd.environmentalLighting", "true") != null, "removed key accepted");
             Home(2);   // two 117 HD versions and no client log naming the loaded one
             Assert(RlSchema.Check("hd.unlockFps", "true") != null, "ambiguous plugin version accepted");
+        }
+
+        static void RotatedLogNamesJar()
+        {
+            string logs = Path.Combine(Home(2), @".runelite\logs");
+            Directory.CreateDirectory(logs);
+            File.WriteAllText(Path.Combine(logs, "client_2026-10-28.0.log"), "INFO Loading external plugin \"117hd\" jar \"TESTHASH\"\n");
+            File.SetLastWriteTimeUtc(Path.Combine(logs, "client_2026-10-28.0.log"), DateTime.UtcNow.AddHours(-2));
+            File.WriteAllText(Path.Combine(logs, "client.log"), "INFO RuneLite starting up\n");
+            Assert(RlSchema.Check("hd.unlockFps", "true") == null, "loaded version not found in the rotated log");
         }
 
         static void SetKeysSkipsInvalid()

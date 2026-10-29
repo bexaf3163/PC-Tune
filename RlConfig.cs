@@ -42,14 +42,21 @@ namespace PCTune
             {
                 string[] jars = Directory.GetFiles(Path.Combine(Home, @".runelite\plugins"), id + "_*.jar");
                 if (jars.Length <= 1) return jars.Length == 1 ? jars[0] : null;
-                string log = Path.Combine(Home, @".runelite\logs\client.log");
-                string text;
-                using (var fs = new FileStream(log, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
-                using (var r = new StreamReader(fs, Latin1)) text = r.ReadToEnd();
-                MatchCollection m = Regex.Matches(text, "Loading external plugin \"" + Regex.Escape(id) + "\" jar \"([^\"]+)\"");
-                if (m.Count == 0) return null;
-                string want = id + "_" + m[m.Count - 1].Groups[1].Value + ".jar";
-                foreach (string j in jars) if (string.Equals(Path.GetFileName(j), want, StringComparison.OrdinalIgnoreCase)) return j;
+                // client.log rotates daily, and a start that stalls early never logs the plugin, so the newest
+                // log that names it is taken.
+                var logs = new DirectoryInfo(Path.Combine(Home, @".runelite\logs")).GetFiles("client*.log");
+                Array.Sort(logs, (a, b) => b.LastWriteTimeUtc.CompareTo(a.LastWriteTimeUtc));
+                foreach (var log in logs)
+                {
+                    string text;
+                    using (var fs = new FileStream(log.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                    using (var r = new StreamReader(fs, Latin1)) text = r.ReadToEnd();
+                    MatchCollection m = Regex.Matches(text, "Loading external plugin \"" + Regex.Escape(id) + "\" jar \"([^\"]+)\"");
+                    if (m.Count == 0) continue;
+                    string want = id + "_" + m[m.Count - 1].Groups[1].Value + ".jar";
+                    foreach (string j in jars) if (string.Equals(Path.GetFileName(j), want, StringComparison.OrdinalIgnoreCase)) return j;
+                    return null;
+                }
             }
             catch { }
             return null;
