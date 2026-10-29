@@ -108,7 +108,7 @@ namespace PCTune
                 if (caption.Length > 0)
                     using (var f = new Font(Ui.Body, 9.75f, FontStyle.Bold))
                         TextRenderer.DrawText(g, caption, f, new Rectangle(Ui.D(20), Ui.D(14), Math.Max(Ui.D(40), p.Width - Ui.D(40)), Ui.D(22)),
-                            Ui.Text, TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+                            Ui.Text, TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
             };
             return p;
         }
@@ -146,6 +146,7 @@ namespace PCTune
             if (right != null)
             {
                 right.Tag = "right";
+                right.Top = Ui.D(y + 2);
                 host.Controls.Add(right);
             }
         }

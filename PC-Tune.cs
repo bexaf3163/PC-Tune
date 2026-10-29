@@ -1424,7 +1424,7 @@ namespace PCTune
                 int th = TextRenderer.MeasureText("Ag", ft).Height;
                 int sh = TextRenderer.MeasureText("Ag", fs).Height;
                 int top = Math.Max(Ui.D(8), (Height - th - sh - Ui.D(3)) / 2);
-                var flags = TextFormatFlags.Left | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis;
+                var flags = TextFormatFlags.Left | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
                 TextRenderer.DrawText(g, Title, ft, new Rectangle(tx, top, availW, th + Ui.D(2)), titleCol, flags);
                 if (Sub.Length > 0)
                     TextRenderer.DrawText(g, Sub, fs, new Rectangle(tx, top + th + Ui.D(3), availW, sh + Ui.D(2)), subCol, flags);
@@ -1458,7 +1458,7 @@ namespace PCTune
         public int Measure(int w)
         {
             int tw = Math.Max(Ui.D(120), w - TextLeft - Ui.D(20));
-            var fl = TextFormatFlags.WordBreak | TextFormatFlags.NoPadding;
+            var fl = TextFormatFlags.WordBreak | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
             int h1 = TextRenderer.MeasureText(Item.Title, FTitle, new Size(tw, int.MaxValue), fl).Height;
             int h2 = TextRenderer.MeasureText(Item.Detail, FSub, new Size(tw, int.MaxValue), fl).Height;
             return h1 + h2 + Ui.D(48);
@@ -1475,7 +1475,7 @@ namespace PCTune
                 g.FillPath(b, path);
             TextRenderer.DrawText(g, text, FPill,
                 new Rectangle(pill.X + Ui.D(6), pill.Y + Ui.D(2), sz.Width + Ui.D(2), sz.Height + Ui.D(2)),
-                tone, TextFormatFlags.NoPadding);
+                tone, TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
             return pill.Right + Ui.D(6);
         }
 
@@ -1505,7 +1505,7 @@ namespace PCTune
             }
 
             int tw = Math.Max(Ui.D(120), Width - TextLeft - Ui.D(20));
-            var flags = TextFormatFlags.WordBreak | TextFormatFlags.NoPadding;
+            var flags = TextFormatFlags.WordBreak | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
             int h1 = TextRenderer.MeasureText(Item.Title, FTitle, new Size(tw, int.MaxValue), flags).Height;
             TextRenderer.DrawText(g, Item.Title, FTitle, new Rectangle(TextLeft, Ui.D(10), tw, h1 + Ui.D(2)), Ui.Text, flags);
 

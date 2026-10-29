@@ -123,6 +123,7 @@ namespace PCTune
             Add("", "Games", gamesPage);
             Add("", "Advanced", advPage);
             Add("", "Settings", settingsPage);
+            NoMnemonics(this);
 
             host = new Panel { Dock = DockStyle.Fill, BackColor = Ui.Bg };
             Controls.Add(host);
@@ -348,6 +349,15 @@ namespace PCTune
             });
             th.IsBackground = true;
             th.Start();
+        }
+
+        // Labels treat "&" as a shortcut marker, so "Window & System Tray" showed as "Window _System Tray".
+        static void NoMnemonics(Control c)
+        {
+            var l = c as Label;
+            if (l != null) l.UseMnemonic = false;
+            foreach (Control k in c.Controls) NoMnemonics(k);
+            c.ControlAdded += (s, e) => NoMnemonics(e.Control);
         }
 
         public void Quit()

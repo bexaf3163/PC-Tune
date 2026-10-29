@@ -14,6 +14,7 @@ namespace PCTune
         readonly Label lTitle, lState, lPlan, lHard;
         readonly Btn bOpt, bRestore, bLocate, bMeasure;
         public Action<GameInfo> OnMeasure;
+        int baseHeight = Ui.D(88);
         readonly Toggle tgHard;
         readonly Action<GameInfo, bool> onOptimize;
         readonly Action<GameInfo> onRestore;
@@ -161,7 +162,8 @@ namespace PCTune
             // Measure runs while RuneLite is open, so it stays enabled when the other buttons lock.
             bMeasure.Visible = g.Id == "osrs" && g.Found && Games.HasHd(g.Config);
 
-            Height = Ui.D(showL2Cap ? 114 : 88);
+            baseHeight = Ui.D(showL2Cap ? 114 : 88);
+            Height = baseHeight;
             LayoutCard();
             Invalidate();
         }
@@ -180,29 +182,37 @@ namespace PCTune
             int pad = Ui.D(18);
             int rightX = w - pad;
 
-            bLocate.Location = new Point(rightX - bLocate.Width, Ui.D(16));
+            // When the buttons would cover the title and its badge (about 100 px), they get their own row.
+            int bw = 0;
+            foreach (Control b in new Control[] { bLocate, bMeasure, bRestore, bOpt }) if (b.Visible) bw += b.Width + Ui.D(8);
+            bool wrap = pad + lTitle.Width + Ui.D(100) > w - pad - bw;
+            int by = wrap ? baseHeight - Ui.D(4) : Ui.D(16);
+            int h = wrap ? baseHeight + Ui.D(38) : baseHeight;
+            if (Height != h) Height = h;
+
+            bLocate.Location = new Point(rightX - bLocate.Width, by);
             rightX = bLocate.Left - Ui.D(8);
 
             if (bMeasure.Visible)
             {
-                bMeasure.Location = new Point(rightX - bMeasure.Width, Ui.D(16));
+                bMeasure.Location = new Point(rightX - bMeasure.Width, by);
                 rightX = bMeasure.Left - Ui.D(8);
             }
 
             if (bRestore.Visible)
             {
-                bRestore.Location = new Point(rightX - bRestore.Width, Ui.D(16));
+                bRestore.Location = new Point(rightX - bRestore.Width, by);
                 rightX = bRestore.Left - Ui.D(8);
             }
 
             if (bOpt.Visible)
             {
-                bOpt.Location = new Point(rightX - bOpt.Width, Ui.D(16));
+                bOpt.Location = new Point(rightX - bOpt.Width, by);
                 rightX = bOpt.Left - Ui.D(12);
             }
 
             lTitle.Location = new Point(pad, Ui.D(14));
-            int textW = Math.Max(Ui.D(160), rightX - pad);
+            int textW = wrap ? w - pad * 2 : Math.Max(Ui.D(160), rightX - pad);
             lState.Bounds = new Rectangle(pad, Ui.D(38), textW, Ui.D(18));
             lPlan.Bounds = new Rectangle(pad, Ui.D(58), w - pad * 2, Ui.D(20));
 
@@ -300,7 +310,7 @@ namespace PCTune
             };
             Host.Controls.Add(lStatus);
 
-            cPrefs = Sect("Gaming Mode Session Preferences", 128);
+            cPrefs = Sect("Gaming Mode Session Preferences", 140);
             Host.Controls.Add(cPrefs);
 
             tgBrowsers = new Toggle();
@@ -442,9 +452,11 @@ namespace PCTune
             if (w < Ui.D(360)) w = Host.ClientSize.Width;
 
             bRefresh.Location = new Point(w - bRefresh.Width, Ui.D(0));
-            lNote.Bounds = new Rectangle(Ui.D(0), Ui.D(2), Math.Max(Ui.D(200), bRefresh.Left - Ui.D(16)), Ui.D(34));
+            int nw = Math.Max(Ui.D(200), bRefresh.Left - Ui.D(16));
+            int nh = TextRenderer.MeasureText(lNote.Text, lNote.Font, new Size(nw, int.MaxValue), TextFormatFlags.WordBreak).Height;
+            lNote.Bounds = new Rectangle(Ui.D(0), Ui.D(2), nw, Math.Max(Ui.D(34), nh + Ui.D(2)));
 
-            int y = Ui.D(42);
+            int y = Math.Max(Ui.D(42), lNote.Bottom + Ui.D(6));
             if (lStatus.Text.Length > 0)
             {
                 lStatus.Location = new Point(Ui.D(0), y);
@@ -459,7 +471,7 @@ namespace PCTune
             }
 
             y += Ui.D(6);
-            cPrefs.Bounds = new Rectangle(Ui.D(0), y, w, Ui.D(132));
+            cPrefs.Bounds = new Rectangle(Ui.D(0), y, w, Ui.D(140));
             PositionRows(cPrefs, w);
         }
 

@@ -149,7 +149,7 @@ namespace PCTune
             Color fg = sel ? Ui.Text : (hot ? Ui.Text : Ui.Dim);
             using (var f = new Font(Ui.Body, 9.75f, sel ? FontStyle.Bold : FontStyle.Regular))
                 TextRenderer.DrawText(g, Label, f, new Rectangle(tx, 0, Math.Max(Ui.D(20), Width - tx - Ui.D(14)), Height),
-                    fg, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                    fg, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
         }
     }
 
@@ -193,7 +193,7 @@ namespace PCTune
 
             int pad = Ui.D(16);
             int w = Math.Max(Ui.D(30), Width - pad * 2);
-            var flags = TextFormatFlags.Left | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis;
+            var flags = TextFormatFlags.Left | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
 
             using (var fc = new Font(Ui.Tiny, 8.5f, FontStyle.Bold))
                 TextRenderer.DrawText(g, Caption, fc, new Rectangle(pad, Ui.D(14), w, Ui.D(16)), Ui.Dim, flags);
@@ -290,7 +290,7 @@ namespace PCTune
                 int pad = Text2.Length <= 2 ? Ui.D(2) : Ui.D(10);
                 var textRect = new Rectangle(pad, 0, Math.Max(Ui.D(8), Width - pad * 2), Height);
                 TextRenderer.DrawText(g, Text2, f, textRect, fg,
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
             }
         }
 
@@ -422,7 +422,7 @@ namespace PCTune
             Color fg = Enabled ? Ui.Text : Color.FromArgb(100, 104, 114);
             using (var f = new Font(Ui.Body, 9.25f))
                 TextRenderer.DrawText(g, SelectedText, f, new Rectangle(Ui.D(10), 0, Math.Max(Ui.D(20), Width - Ui.D(32)), Height), fg,
-                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
 
             int cx = Width - Ui.D(16), cy = Height / 2 - Ui.D(1);
             using (var p = new Pen(fg, 1.5f))

@@ -32,7 +32,7 @@ namespace PCTune
                 using (var f = new Font(Ui.Tiny, 8.5f, FontStyle.Bold))
                     TextRenderer.DrawText(e.Graphics, e.Header.Text, f,
                         new Rectangle(e.Bounds.X + Ui.D(8), e.Bounds.Y, e.Bounds.Width - Ui.D(10), e.Bounds.Height),
-                        Ui.Dim, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                        Ui.Dim, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
             };
             lv.DrawItem += delegate (object s, DrawListViewItemEventArgs e)
             {
@@ -72,7 +72,7 @@ namespace PCTune
                 if (e.ColumnIndex > 0) fg = Ui.Dim;
                 TextRenderer.DrawText(g, e.SubItem.Text, lv.Font,
                     new Rectangle(x, e.Bounds.Y, Math.Max(0, w), e.Bounds.Height), fg,
-                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
             };
             return lv;
         }
@@ -144,7 +144,7 @@ namespace PCTune
                 ForeColor = Ui.Text,
                 AutoSize = true,
                 BackColor = Color.Transparent,
-                Location = new Point(Ui.D(20), Ui.D(148))
+                Location = new Point(Ui.D(20), Ui.D(158))
             };
             bMinus = new Btn { Text2 = "-", Width = Ui.D(32), Height = Ui.D(28) };
             bPlus = new Btn { Text2 = "+", Width = Ui.D(32), Height = Ui.D(28) };
@@ -305,7 +305,7 @@ namespace PCTune
         {
             base.Relayout();
             int w = Host.ClientSize.Width, h = Host.ClientSize.Height;
-            cAuto.Bounds = new Rectangle(Ui.D(0), Ui.D(0), w, Ui.D(184));
+            cAuto.Bounds = new Rectangle(Ui.D(0), Ui.D(0), w, Ui.D(194));
             bNow.Location = new Point(w - bNow.Width - Ui.D(20), Ui.D(40));
             lState.Size = new Size(Math.Max(Ui.D(160), bNow.Left - Ui.D(32)), Ui.D(24));
             tgAuto.Location = new Point(w - tgAuto.Width - Ui.D(20), Ui.D(100));
@@ -316,11 +316,11 @@ namespace PCTune
                     l.Size = new Size(Math.Max(Ui.D(160), w - Ui.D(110)), Ui.D(34));
             }
             int sx = Ui.D(20) + lEvery.PreferredWidth + Ui.D(14);
-            bMinus.Location = new Point(sx, Ui.D(144));
-            lVal.Location = new Point(sx + Ui.D(38), Ui.D(144));
-            bPlus.Location = new Point(sx + Ui.D(124), Ui.D(144));
+            bMinus.Location = new Point(sx, Ui.D(154));
+            lVal.Location = new Point(sx + Ui.D(38), Ui.D(154));
+            bPlus.Location = new Point(sx + Ui.D(124), Ui.D(154));
 
-            int top = Ui.D(196);
+            int top = Ui.D(206);
             cList.Bounds = new Rectangle(Ui.D(0), top, w, Math.Max(Ui.D(190), h - top));
             lv.Bounds = new Rectangle(Ui.D(14), Ui.D(44), w - Ui.D(28), cList.Height - Ui.D(44) - Ui.D(54));
             DarkList.Fit(lv);
@@ -618,6 +618,7 @@ namespace PCTune
             if (g.IndexOf("Security", StringComparison.OrdinalIgnoreCase) >= 0 ||
                 g.IndexOf("Trade-off", StringComparison.OrdinalIgnoreCase) >= 0 ||
                 g.IndexOf("Optional", StringComparison.OrdinalIgnoreCase) >= 0) return "Advanced";
+            if (g.IndexOf("cost of protection", StringComparison.OrdinalIgnoreCase) >= 0) return "Speed vs safety";
             return g.Length > 14 ? g.Substring(0, 14) : g;
         }
 
@@ -630,7 +631,7 @@ namespace PCTune
             {
                 Text2 = label,
                 Height = Ui.D(28),
-                Width = Math.Max(Ui.D(54), TextRenderer.MeasureText(label, new Font(Ui.Body, 8.75f, FontStyle.Bold)).Width + Ui.D(22))
+                Width = Math.Max(Ui.D(54), TextRenderer.MeasureText(label, new Font(Ui.Body, 9.25f, FontStyle.Bold), Size.Empty, TextFormatFlags.NoPrefix).Width + Ui.D(22))
             };
             string key = groupKey;
             b.Click += delegate
@@ -719,7 +720,7 @@ namespace PCTune
         {
             base.Relayout();
             int w = ClientSize.Width, h = ClientSize.Height;
-            int padX = CompactHeader ? Ui.D(0) : Ui.D(28);
+            int padX = Ui.D(28);
             int topY = CompactHeader ? Ui.D(4) : Ui.D(84);
             int contentW = Math.Max(Ui.D(240), w - padX * 2);
 
