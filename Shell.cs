@@ -158,6 +158,8 @@ namespace PCTune
             };
             carSync.Start();
 
+            AiPing.Apply();
+
             // Show floating widget according to startup vs normal launch preferences
             bool wantWidget = isStartup ? (Cfg.ShowWidgetOnStartup && Cfg.WidgetOn) : Cfg.WidgetOn;
             if (wantWidget) ShowWidget(true);

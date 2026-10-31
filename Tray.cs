@@ -30,7 +30,7 @@ namespace PCTune
     {
         static NotifyIcon ni;
         static ContextMenuStrip menu;
-        static ToolStripMenuItem itHead, itOpen, itBoost, itWidget, itExit;
+        static ToolStripMenuItem itHead, itOpen, itBoost, itWidget, itAiPing, itExit;
         static ToolStripMenuItem itBal, itGame, itComp, itPerf, itEco, itCar;
         static Shell shell;
         static Action openWindow;
@@ -99,6 +99,12 @@ namespace PCTune
             menu.Items.Add(new ToolStripSeparator());
             itWidget = Item("Hide Widget", delegate { if (shell != null) shell.ToggleWidget(); });
             menu.Items.Add(itWidget);
+            itAiPing = Item("AI ping every hour (Claude, Codex)", delegate
+            {
+                Cfg.AiPing = !Cfg.AiPing;
+                AiPing.Apply();
+            });
+            menu.Items.Add(itAiPing);
 
             menu.Items.Add(new ToolStripSeparator());
             itExit = Item("Exit", delegate { if (shell != null) shell.Quit(); });
@@ -173,6 +179,7 @@ namespace PCTune
 
             bool vis = shell != null && shell.IsWidgetVisible;
             itWidget.Text = vis ? "Hide Widget" : "Show Widget";
+            itAiPing.Checked = Cfg.AiPing;
         }
 
         static void Job(Action work, string done)

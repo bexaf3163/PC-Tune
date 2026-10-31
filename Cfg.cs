@@ -176,6 +176,13 @@ namespace PCTune
             set { SetFlag("Tray", value); }
         }
 
+        // Hourly one-line ping to Claude Code and Codex (see AiPing.cs). Off until the user turns it on.
+        public static bool AiPing
+        {
+            get { return Flag("AiPing", false); }
+            set { SetFlag("AiPing", value); }
+        }
+
         public static bool WidgetOn
         {
             get { return Flag("Widget", true); }
