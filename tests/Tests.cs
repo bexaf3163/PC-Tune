@@ -29,6 +29,7 @@ namespace PCTune
             Run("updates only to a strictly newer release", UpdateVersionCompare);
             Run("an update must match both GitHub's digest and SHA256SUMS", UpdateVerification);
             Run("side-by-side ultrawide window is preserved while oversized canvas is clamped", FitWindowPreservesSideBySide);
+            Run("117 HD plan tunes map chunks and worker CPU cap cleanly", HdPlanValidatesCleanly);
             Console.WriteLine(failed == 0 ? "ALL TESTS PASSED" : failed + " TEST(S) FAILED");
             return failed == 0 ? 0 : 1;
         }
@@ -209,6 +210,29 @@ namespace PCTune
             f = Profile(h, "runelite.clientBounds=0\\:0\\:3440\\:1392\\:g\n");
             Games.FitWindow(f, 3440, 1440, Log);
             Assert(Games.Prop(f, "runelite.clientBounds") == "0\\:0\\:1920\\:1080\\:g", "oversized ultrawide canvas was not clamped to Full HD budget");
+        }
+
+        static void HdPlanValidatesCleanly()
+        {
+            var eff = Games.HdPlan(4, "60");
+            Assert(eff.Exists(kv => kv[0] == "hd.expandedMapLoadingChunks" && kv[1] == "1"), "Efficient rung should cap expandedMapLoadingChunks to 1");
+            Assert(eff.Exists(kv => kv[0] == "hd.cpuUsageLimit" && (kv[1] == "MEDIUM" || kv[1] == "HIGH")), "HdPlan should bound hd.cpuUsageLimit below MAX");
+
+            string realHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            string realPlugins = Path.Combine(realHome, @".runelite\plugins");
+            if (Directory.Exists(realPlugins) && Directory.GetFiles(realPlugins, "117hd_*.jar").Length > 0)
+            {
+                RlSchema.Home = realHome;
+                if (RlSchema.For("hd") != null)
+                {
+                    for (int r = 0; r < 6; r++)
+                        foreach (var kv in Games.HdPlan(r, "60"))
+                        {
+                            string why = RlSchema.Check(kv[0], kv[1]);
+                            Assert(why == null, "real 117 HD schema rejected " + kv[0] + "=" + kv[1] + ": " + why);
+                        }
+                }
+            }
         }
     }
 }
