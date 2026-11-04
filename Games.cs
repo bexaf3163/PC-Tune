@@ -67,7 +67,7 @@ namespace PCTune
             new[] { "MSAA_4",   "DETAILED", "RES_4096", "DISTANCE_50", "true",  "80", "60", "MANY", "true",  "true",  "false", "true",  "true",  "100", "16" },
             new[] { "MSAA_4",   "FAST",     "RES_2048", "DISTANCE_50", "false", "70", "60", "SOME", "true",  "true",  "false", "true",  "true",  "100", "16" },
             new[] { "MSAA_2",   "FAST",     "RES_2048", "DISTANCE_40", "false", "60", "50", "SOME", "false", "true",  "false", "false", "true",  "100", "16" },
-            new[] { "DISABLED", "OFF",      "RES_2048", "DISTANCE_30", "false", "50", "50", "FEW",  "false", "true",  "false", "false", "true",  "85",  "16" },
+            new[] { "DISABLED", "OFF",      "RES_2048", "DISTANCE_30", "false", "50", "50", "FEW",  "false", "true",  "false", "false", "false", "85",  "16" },
             new[] { "DISABLED", "OFF",      "RES_1024", "DISTANCE_30", "false", "40", "40", "FEW",  "false", "false", "false", "false", "false", "75",  "4" },
         };
         static readonly string[][] HdFixed = {
@@ -77,6 +77,9 @@ namespace PCTune
             // tiledLighting is left to 117 HD: it became a DEFAULT/ON/OFF enum, and environmentalLighting was removed.
             new[] { "hd.underwaterCaustics", "true" },
             new[] { "hd.expandShadowDraw", "false" },
+            new[] { "hd.uiScalingMode", "LINEAR" },
+            new[] { "hd.asyncModelProcessing", "true" },
+            new[] { "hd.powerSaving", "false" },
             // One frame limiter: the 117 HD cap. Vsync off so it cannot fight the cap on a 100+ Hz panel.
             new[] { "hd.unlockFps", "true" }, new[] { "hd.vsyncMode", "OFF" },
         };
@@ -86,6 +89,8 @@ namespace PCTune
             var r = new List<string[]>();
             for (int i = 0; i < RungKeys.Length; i++) r.Add(new[] { RungKeys[i], Rungs[rung][i] });
             r.AddRange(HdFixed);
+            if (RlSchema.Check("hd.asyncModelCacheSizeMiB", "64") == null)
+                r.Add(new[] { "hd.asyncModelCacheSizeMiB", "64" });
             r.Add(new[] { "hd.fpsTarget", fps });
             return r;
         }
@@ -180,21 +185,34 @@ namespace PCTune
             return next;
         }
 
-        // The profile is tuned for this canvas, so size the client window to match (never beyond the monitor).
-        static void FitWindow(string c, Action<string> log)
+        // Clamps oversized game windows to the tuned Full HD budget (or monitor size), while
+        // leaving side-by-side layouts (such as OSRS Path + RuneLite on ultrawide) untouched.
+        internal static void FitWindow(string c, int monW, int monH, Action<string> log)
         {
             string[] p = Prop(c, "runelite.clientBounds").Replace("\\:", ":").Split(':');
             int x, y, w, h;
             if (p.Length < 4 || p.Length > 5 || !int.TryParse(p[0], out x) || !int.TryParse(p[1], out y) || !int.TryParse(p[2], out w) || !int.TryParse(p[3], out h)) return;
             // A trailing ":g" means RuneLite stores the game canvas size, so the frame adds title bar and sidebar.
             string tail = p.Length == 5 ? "\\:" + p[4] : "";
+            int mw = monW - (tail.Length > 0 ? 260 : 0), mh = monH - (tail.Length > 0 ? 100 : 48);
+            if (mw <= 0 || mh <= 0) return;
+            bool fitsScreen = x >= 0 && y >= 0 && x + w <= monW && y + h <= monH;
+            bool withinBudget = w <= OsrsWinW && (long)w * h <= (long)OsrsWinW * OsrsWinH;
+            if (fitsScreen && withinBudget) return;
+            int W = Math.Min(w, Math.Min(OsrsWinW, mw)), H = Math.Min(h, Math.Min(OsrsWinH, mh));
+            int nx = x, ny = y;
+            if (nx < 0) nx = 0;
+            else if (nx + W > monW) nx = Math.Max(0, monW - W);
+            if (ny < 0) ny = 0;
+            else if (ny + H > monH) ny = Math.Max(0, monH - H);
+            if (w == W && h == H && nx == x && ny == y) return;
+            SetKey(c, "runelite.clientBounds", nx + "\\:" + ny + "\\:" + W + "\\:" + H + tail, log);
+        }
+
+        static void FitWindow(string c, Action<string> log)
+        {
             HwInfo.Ensure();
-            int mw = HwInfo.MonitorWidth - (tail.Length > 0 ? 260 : 0), mh = HwInfo.MonitorHeight - (tail.Length > 0 ? 100 : 48);
-            int W = Math.Min(OsrsWinW, mw), H = Math.Min(OsrsWinH, mh);
-            if (w == W && h == H) return;
-            if (x >= 0 && x + W > mw) x = mw - W;
-            if (y >= 0 && y + H > mh) y = Math.Max(0, mh - H);
-            SetKey(c, "runelite.clientBounds", x + "\\:" + y + "\\:" + W + "\\:" + H + tail, log);
+            FitWindow(c, HwInfo.MonitorWidth, HwInfo.MonitorHeight, log);
         }
 
         [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
@@ -207,14 +225,32 @@ namespace PCTune
             return (int)Math.Round(v[Math.Min(v.Count - 1, (int)(v.Count * 0.95))]);
         }
 
+        static bool AnyProcess(string name)
+        {
+            bool any = false;
+            foreach (var p in Process.GetProcessesByName(name))
+            {
+                using (p) any = true;
+            }
+            return any;
+        }
+
         // RuneLite.exe, or javaw.exe from RuneLite's bundled JRE when another launcher (OSRS Path) starts the client.
         static HashSet<int> OsrsPids()
         {
             var r = new HashSet<int>();
-            foreach (var p in Process.GetProcessesByName("RuneLite")) r.Add(p.Id);
+            foreach (var p in Process.GetProcessesByName("RuneLite"))
+            {
+                using (p) r.Add(p.Id);
+            }
             foreach (var p in Process.GetProcessesByName("javaw"))
-                try { if (p.MainModule.FileName.IndexOf(@"\RuneLite\", StringComparison.OrdinalIgnoreCase) >= 0) r.Add(p.Id); }
-                catch { }
+            {
+                using (p)
+                {
+                    try { if (p.MainModule.FileName.IndexOf(@"\RuneLite\", StringComparison.OrdinalIgnoreCase) >= 0) r.Add(p.Id); }
+                    catch { }
+                }
+            }
             return r;
         }
 
@@ -501,12 +537,12 @@ namespace PCTune
             }
             else if (mode == "gpu")
             {
-                g.Now = "Target: " + wantFps + " FPS  ·  Profile: GPU Plugin  ·  Status: " + (g.Done ? "Optimized" : "Not Optimized");
                 g.Done = Num(Prop(g.Config, "gpu.drawDistance")) <= 90 &&
                          MsaaAtMost4(Prop(g.Config, "gpu.antiAliasingMode")) &&
                          Prop(g.Config, "gpu.fpsTarget") == wantFps;
+                g.Now = "Target: " + wantFps + " FPS  ·  Profile: GPU Plugin  ·  Status: " + (g.Done ? "Optimized" : "Not Optimized");
                 g.Plan = g.Done ? "GPU plugin tuned (" + wantFps + " FPS locked, distance <= 90, AA <= x4)"
-                                : "Lock to " + wantFps + " FPS, draw distance <= 90, AA <= x4, background 15 FPS cap";
+                                : "Lock to " + wantFps + " FPS, draw distance <= 90, AA <= x4";
             }
             else
             {
@@ -768,12 +804,12 @@ namespace PCTune
             try
             {
                 if (g.Id == "osrs" && OsrsPids().Count > 0) return true;
-                if (g.Proc.Length > 0 && Process.GetProcessesByName(g.Proc).Length > 0)
+                if (g.Proc.Length > 0 && AnyProcess(g.Proc))
                     return true;
                 if (g.ExtraProcs != null)
                 {
                     foreach (string p in g.ExtraProcs)
-                        if (p.Length > 0 && Process.GetProcessesByName(p).Length > 0)
+                        if (p.Length > 0 && AnyProcess(p))
                             return true;
                 }
             }
@@ -789,6 +825,15 @@ namespace PCTune
                 foreach (string x in g.ExtraExes)
                     if (!string.IsNullOrEmpty(x)) yield return x;
             }
+        }
+
+        // IFEO matches only the image file name (not full path), so shared runtime hosts like javaw.exe
+        // must never get global PerfOptions; BoostRunningGames boosts the specific RuneLite PID instead.
+        static bool SharedHostExe(string exe)
+        {
+            string fn = Path.GetFileName(exe);
+            return string.Equals(fn, "javaw.exe", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(fn, "java.exe", StringComparison.OrdinalIgnoreCase);
         }
 
         public static void Optimize(GameInfo g, bool hardL2, Action<string> log)
@@ -807,8 +852,14 @@ namespace PCTune
                     log("  [+] fullscreen optimizations disabled: " + Path.GetFileName(exe));
                 if (GpuPref(exe))
                     log("  [+] high-performance GPU & DXGI swapchain upgrade enabled: " + Path.GetFileName(exe));
-                if (SetPerfOptions(exe, g.Id == "osrs" ? 6 : 3))
-                    log("  [+] " + (g.Id == "osrs" ? "Above Normal" : "High") + " CPU / I/O / RAM page priority registered in IFEO: " + Path.GetFileName(exe));
+                if (SharedHostExe(exe))
+                {
+                    string fn = Path.GetFileName(exe);
+                    if (HasPerfOptions(exe) && Sys.DelRegSubKeyTree(@"HKLM\" + IfeoBase + fn, "PerfOptions") && !HasPerfOptions(exe))
+                        log("  [+] removed global IFEO PerfOptions from shared runtime: " + fn);
+                }
+                else if (SetPerfOptions(exe, g.Id == "osrs" ? 6 : 3))
+                    log("  [+] " + (g.Id == "osrs" ? "Above Normal" : "High") + " CPU / RAM page priority registered in IFEO: " + Path.GetFileName(exe));
             }
 
             if (g.Id == "l2") OptL2(g, hardL2, log);
@@ -901,17 +952,17 @@ namespace PCTune
             catch { return false; }
         }
 
-        // cls: IFEO CpuPriorityClass (3 = High, 6 = Above Normal)
+        // cls: IFEO CpuPriorityClass (3 = High, 6 = Above Normal). IoPriority 2 = Normal (3 = High is ignored without SeIncreaseBasePriorityPrivilege).
         static bool SetPerfOptions(string exe, int cls)
         {
-            if (string.IsNullOrEmpty(exe)) return false;
+            if (string.IsNullOrEmpty(exe) || SharedHostExe(exe)) return false;
             try
             {
                 string fn = Path.GetFileName(exe);
                 string regPath = @"HKLM\" + IfeoBase + fn + @"\PerfOptions";
                 object cur = Sys.GetReg(regPath, "CpuPriorityClass");
                 bool ok1 = Sys.SetRegVerify(regPath, "CpuPriorityClass", cls, RegistryValueKind.DWord);
-                bool ok2 = Sys.SetRegVerify(regPath, "IoPriority", 3, RegistryValueKind.DWord);
+                bool ok2 = Sys.SetRegVerify(regPath, "IoPriority", 2, RegistryValueKind.DWord);
                 bool ok3 = Sys.SetRegVerify(regPath, "PagePriority", 5, RegistryValueKind.DWord);
                 if (!ok1 || !ok2 || !ok3) return false;
                 Sys.ToFile("GAMES IFEO PerfOptions " + fn);
@@ -934,6 +985,7 @@ namespace PCTune
                     if (!string.IsNullOrEmpty(n)) names.Add(n);
                 }
             }
+            HashSet<int> osrsPids = names.Contains("javaw") ? OsrsPids() : null;
             foreach (string procName in names)
             {
                 try
@@ -947,7 +999,7 @@ namespace PCTune
                                 // RuneLite runs windowed, so DWM must still compose its frames: Above Normal, not High.
                                 // javaw.exe is the RuneLite client under OSRS Path; other Java programs are left alone.
                                 bool javaw = string.Equals(procName, "javaw", StringComparison.OrdinalIgnoreCase);
-                                if (javaw && !OsrsPids().Contains(p.Id)) continue;
+                                if (javaw && (osrsPids == null || !osrsPids.Contains(p.Id))) continue;
                                 p.PriorityClass = javaw || string.Equals(procName, "runelite", StringComparison.OrdinalIgnoreCase)
                                     ? ProcessPriorityClass.AboveNormal : ProcessPriorityClass.High;
                                 p.PriorityBoostEnabled = true;
@@ -1126,13 +1178,14 @@ namespace PCTune
             if (!car) ReleaseCarKeys(c, log);
             string fps = OsrsTargetFpsString;
 
-            // If the FPS Control plugin is active, prevent its foreground cap from fighting GPU/117HD
-            // while capping unfocused FPS to 15 to save power when alt-tabbed.
+            // Keep FPS Control's foreground and unfocused caps off during normal play so side-by-side
+            // companion apps (such as OSRS Path) do not drop RuneLite to 15 FPS when clicked.
+            // Only "In the Car" battery mode caps unfocused FPS to 15 to save battery power.
             if (Prop(c, "runelite.fpsplugin") == "true")
             {
                 SetKey(c, "fpscontrol.limitFps", "false", log);
-                SetKey(c, "fpscontrol.limitFpsUnfocused", "true", log);
-                if (Num(Prop(c, "fpscontrol.maxFpsUnfocused")) > 15)
+                SetKey(c, "fpscontrol.limitFpsUnfocused", car ? "true" : "false", log);
+                if (car && Num(Prop(c, "fpscontrol.maxFpsUnfocused")) > 15)
                     SetKey(c, "fpscontrol.maxFpsUnfocused", "15", log);
             }
 
@@ -1296,7 +1349,7 @@ namespace PCTune
             if (g.Id == "osrs" && g.Config.Length > 0 && File.Exists(KeysFile(g.Config))) return true;
             if (g.Id != "osrs" && g.Config.Length > 0 && File.Exists(g.Config + ".pctune.bak")) return true;
             foreach (string exe in AllExes(g))
-                if (HasLayer(exe) || HasGpuPref(exe) || HasPerfOptions(exe)) return true;
+                if (HasLayer(exe) || HasGpuPref(exe) || (!SharedHostExe(exe) && HasPerfOptions(exe))) return true;
             return false;
         }
 

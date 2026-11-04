@@ -28,6 +28,7 @@ namespace PCTune
             Run("a running client blocks the write", RunningClientBlocks);
             Run("updates only to a strictly newer release", UpdateVersionCompare);
             Run("an update must match both GitHub's digest and SHA256SUMS", UpdateVerification);
+            Run("side-by-side ultrawide window is preserved while oversized canvas is clamped", FitWindowPreservesSideBySide);
             Console.WriteLine(failed == 0 ? "ALL TESTS PASSED" : failed + " TEST(S) FAILED");
             return failed == 0 ? 0 : 1;
         }
@@ -192,6 +193,22 @@ namespace PCTune
             string f = Profile(h, Sample);
             Assert(!RlProfile.Commit(f, new List<string[]> { new[] { "hd.unlockFps", "true" } }, Log, () => true), "wrote while client running");
             Assert(File.ReadAllText(f) == Sample, "profile changed while client running");
+        }
+
+        static void FitWindowPreservesSideBySide()
+        {
+            string h = Home();
+            string f = Profile(h, "runelite.clientBounds=1530\\:208\\:1829\\:1094\\:g\n");
+            Games.FitWindow(f, 3440, 1440, Log);
+            Assert(Games.Prop(f, "runelite.clientBounds") == "1530\\:208\\:1829\\:1094\\:g", "side-by-side ultrawide window was moved or resized");
+
+            f = Profile(h, "runelite.clientBounds=100\\:80\\:1280\\:720\\:g\n");
+            Games.FitWindow(f, 3440, 1440, Log);
+            Assert(Games.Prop(f, "runelite.clientBounds") == "100\\:80\\:1280\\:720\\:g", "smaller window was forcibly enlarged");
+
+            f = Profile(h, "runelite.clientBounds=0\\:0\\:3440\\:1392\\:g\n");
+            Games.FitWindow(f, 3440, 1440, Log);
+            Assert(Games.Prop(f, "runelite.clientBounds") == "0\\:0\\:1920\\:1080\\:g", "oversized ultrawide canvas was not clamped to Full HD budget");
         }
     }
 }
