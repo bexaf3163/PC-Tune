@@ -30,7 +30,7 @@ namespace PCTune
     {
         static NotifyIcon ni;
         static ContextMenuStrip menu;
-        static ToolStripMenuItem itHead, itOpen, itBoost, itWidget, itExit;
+        static ToolStripMenuItem itHead, itOpen, itBoost, itCodex, itCodexNow, itWidget, itExit;
         static ToolStripMenuItem itBal, itGame, itComp, itPerf, itEco, itCar;
         static Shell shell;
         static Action openWindow;
@@ -95,6 +95,20 @@ namespace PCTune
             menu.Items.Add(itPerf);
             menu.Items.Add(itEco);
             menu.Items.Add(itCar);
+
+            menu.Items.Add(new ToolStripSeparator());
+            itCodex = Item("Codex Auto-Ping: On", delegate
+            {
+                Cfg.CodexPingOn = !Cfg.CodexPingOn;
+                if (shell != null) shell.ReloadCodexSchedule();
+            });
+            itCodexNow = Item("Ping Codex Now", delegate
+            {
+                if (shell != null)
+                    Job(delegate { CodexPing.SendPingNow(shell.Eng.Echo, true); }, "Codex continuation ping sent");
+            });
+            menu.Items.Add(itCodex);
+            menu.Items.Add(itCodexNow);
 
             menu.Items.Add(new ToolStripSeparator());
             itWidget = Item("Hide Widget", delegate { if (shell != null) shell.ToggleWidget(); });
@@ -170,6 +184,12 @@ namespace PCTune
             itPerf.ForeColor = prof == "perf" ? Ui.Accent : Ui.Text;
             itEco.ForeColor  = prof == "eco"  ? Ui.Accent : Ui.Text;
             itCar.ForeColor  = prof == "car"  ? Ui.Accent : Ui.Text;
+
+            bool codexOn = Cfg.CodexPingOn;
+            itCodex.Text = codexOn
+                ? ("Codex Auto-Ping: On (" + Cfg.CodexPingMinutes + "m)")
+                : "Codex Auto-Ping: Off";
+            itCodex.ForeColor = codexOn ? Ui.Green : Ui.Dim;
 
             bool vis = shell != null && shell.IsWidgetVisible;
             itWidget.Text = vis ? "Hide Widget" : "Show Widget";

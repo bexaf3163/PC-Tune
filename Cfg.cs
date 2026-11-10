@@ -151,6 +151,29 @@ namespace PCTune
             set { Set("RamMinutes", value, RegistryValueKind.DWord); }
         }
 
+        // ---------------------------------------------------------- codex auto-ping
+        public static bool CodexPingOn
+        {
+            get { return Flag("CodexPingOn", true); }
+            set { SetFlag("CodexPingOn", value); }
+        }
+
+        public static int CodexPingMinutes
+        {
+            get { int v = Num("CodexPingMinutes", 5); return v < 1 ? 1 : v > 120 ? 120 : v; }
+            set { Set("CodexPingMinutes", value < 1 ? 1 : value > 120 ? 120 : value, RegistryValueKind.DWord); }
+        }
+
+        public static string CodexPingPrompt
+        {
+            get
+            {
+                string s = Str("CodexPingPrompt", "Продолжай");
+                return string.IsNullOrEmpty(s) ? "Продолжай" : s;
+            }
+            set { Set("CodexPingPrompt", string.IsNullOrEmpty(value) ? "Продолжай" : value, RegistryValueKind.String); }
+        }
+
         public static List<string> KillList
         {
             get

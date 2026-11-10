@@ -30,6 +30,7 @@ namespace PCTune
             Run("an update must match both GitHub's digest and SHA256SUMS", UpdateVerification);
             Run("side-by-side ultrawide window is preserved while oversized canvas is clamped", FitWindowPreservesSideBySide);
             Run("117 HD plan tunes map chunks and worker CPU cap cleanly", HdPlanValidatesCleanly);
+            Run("Codex auto-ping inspects active rollout and parses state cleanly", CodexInspectWorksCleanly);
             Console.WriteLine(failed == 0 ? "ALL TESTS PASSED" : failed + " TEST(S) FAILED");
             return failed == 0 ? 0 : 1;
         }
@@ -232,6 +233,18 @@ namespace PCTune
                             Assert(why == null, "real 117 HD schema rejected " + kv[0] + "=" + kv[1] + ": " + why);
                         }
                 }
+            }
+        }
+
+        static void CodexInspectWorksCleanly()
+        {
+            string desc = CodexPing.DescribeStatus();
+            Assert(!string.IsNullOrEmpty(desc), "DescribeStatus returned empty string");
+            var st = CodexPing.InspectActiveSession();
+            if (st != null)
+            {
+                Assert(!string.IsNullOrEmpty(st.ThreadId), "Active Codex session must have a valid ThreadId");
+                Assert(st.IsRunning != st.IsStopped, "Session must be either running or stopped");
             }
         }
     }

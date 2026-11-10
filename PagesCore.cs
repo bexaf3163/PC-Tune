@@ -338,9 +338,11 @@ namespace PCTune
 
             bool bat = Power.OnBattery();
             int bp = Power.BatteryPercent();
+            string codexTag = Cfg.CodexPingOn ? ("   ·   Codex Ping: On (" + Cfg.CodexPingMinutes + "m)") : "";
             lFooterStatus.Text = "Mode: " + Cfg.ProfileTitle + "   ·   "
                                + (bat ? "Battery" : "AC Power")
-                               + (bp >= 0 ? " (" + bp + "%)" : "");
+                               + (bp >= 0 ? " (" + bp + "%)" : "")
+                               + codexTag;
         }
 
         public override void Refresh2()
@@ -793,24 +795,31 @@ namespace PCTune
     }
 
     // ------------------------------------------------------------------ Settings Page
-    // Strictly application-level preferences (Startup, Widget, Window/Tray, Exit).
+    // Strictly application-level preferences (Startup, Codex Auto-Ping, Widget, Window/Tray, Exit).
     class SettingsPage : Page
     {
-        readonly Panel cStart, cWidget, cWindow;
+        readonly Panel cStart, cCodex, cWidget, cWindow;
         readonly Toggle tgAuto, tgWidgetStart, tgMainStart, tgPerf;
+        readonly Toggle tgCodex;
+        readonly Btn bCodexMinus, bCodexPlus, bCodexNow;
+        readonly Label lCodexEvery, lCodexVal, lCodexState;
         readonly Toggle tgWidget, tgCollapsed;
         readonly Toggle tgClose, tgTray, tgPromo;
         readonly Btn bResetPos, bExitApp, bUpdate;
         readonly Action<bool> widgetToggle;
         readonly Action onResetWidgetPos;
         readonly Action onExitApp;
+        readonly Action onCodexChanged;
+        readonly Action onCodexPingNow;
 
-        public SettingsPage(Action<bool> onWidget, Action resetWidget, Action exitApp)
-            : base("Settings", "Startup behavior, floating widget, and window preferences")
+        public SettingsPage(Action<bool> onWidget, Action resetWidget, Action exitApp, Action codexChanged = null, Action codexPingNow = null)
+            : base("Settings", "Startup behavior, Codex Auto-Ping, floating widget, and window preferences")
         {
             widgetToggle = onWidget;
             onResetWidgetPos = resetWidget;
             onExitApp = exitApp;
+            onCodexChanged = codexChanged;
+            onCodexPingNow = codexPingNow;
 
             // 1. Startup section
             cStart = Sect("Startup", 284);
@@ -840,7 +849,78 @@ namespace PCTune
             Row(cStart, 226, "Re-apply active power profile on startup",
                 "Restores your last selected power profile automatically at launch.", tgPerf);
 
-            // 2. Floating Widget section
+            // 2. Codex Auto-Ping section
+            cCodex = Sect("Codex Auto-Ping (ChatGPT / Codex Desktop)", 168);
+            Host.Controls.Add(cCodex);
+
+            tgCodex = new Toggle();
+            tgCodex.Init(Cfg.CodexPingOn);
+            tgCodex.Toggled += delegate
+            {
+                Cfg.CodexPingOn = tgCodex.On;
+                SyncCodexUi();
+                if (onCodexChanged != null) onCodexChanged();
+                Tray.Refresh2();
+            };
+            Row(cCodex, 46, "Automatically ping stopped Codex chat to continue work",
+                "Queues \"" + Cfg.CodexPingPrompt + "\" and wakes the active Codex session when a turn completes or rate-limit resets.", tgCodex);
+
+            lCodexEvery = new Label
+            {
+                Text = "Check interval",
+                Font = new Font(Ui.Body, 9.25f),
+                ForeColor = Ui.Text,
+                AutoSize = true,
+                BackColor = Color.Transparent,
+                Location = new Point(Ui.D(20), Ui.D(116))
+            };
+            bCodexMinus = new Btn { Text2 = "−", Width = Ui.D(34), Height = Ui.D(30) };
+            bCodexPlus = new Btn { Text2 = "+", Width = Ui.D(34), Height = Ui.D(30) };
+            lCodexVal = new Label
+            {
+                TextAlign = ContentAlignment.MiddleCenter,
+                Font = new Font(Ui.Body, 9.5f, FontStyle.Bold),
+                ForeColor = Ui.Text,
+                BackColor = Ui.PanelHi,
+                Size = new Size(Ui.D(80), Ui.D(30))
+            };
+            bCodexMinus.Click += delegate
+            {
+                int m = Cfg.CodexPingMinutes;
+                Cfg.CodexPingMinutes = m <= 1 ? 1 : m <= 5 ? m - 1 : m - 5;
+                SyncCodexUi();
+                if (onCodexChanged != null) onCodexChanged();
+            };
+            bCodexPlus.Click += delegate
+            {
+                int m = Cfg.CodexPingMinutes;
+                Cfg.CodexPingMinutes = m < 5 ? m + 1 : m >= 120 ? 120 : m + 5;
+                SyncCodexUi();
+                if (onCodexChanged != null) onCodexChanged();
+            };
+            bCodexNow = new Btn { Text2 = "Ping Now", Tone = Ui.Accent, Filled = true, Width = Ui.D(110), Height = Ui.D(30) };
+            bCodexNow.Click += delegate
+            {
+                if (onCodexPingNow != null) onCodexPingNow();
+            };
+            lCodexState = new Label
+            {
+                Font = new Font(Ui.Tiny, 8.5f),
+                ForeColor = Ui.Dim,
+                AutoSize = false,
+                AutoEllipsis = true,
+                TextAlign = ContentAlignment.MiddleLeft,
+                BackColor = Color.Transparent,
+                Size = new Size(Ui.D(260), Ui.D(30))
+            };
+            cCodex.Controls.Add(lCodexEvery);
+            cCodex.Controls.Add(bCodexMinus);
+            cCodex.Controls.Add(lCodexVal);
+            cCodex.Controls.Add(bCodexPlus);
+            cCodex.Controls.Add(bCodexNow);
+            cCodex.Controls.Add(lCodexState);
+
+            // 3. Floating Widget section
             cWidget = Sect("Floating Widget", 210);
             Host.Controls.Add(cWidget);
 
@@ -869,7 +949,7 @@ namespace PCTune
             };
             cWidget.Controls.Add(bResetPos);
 
-            // 3. Window & System Tray section
+            // 4. Window & System Tray section
             cWindow = Sect("Window & System Tray", 262);
             Host.Controls.Add(cWindow);
 
@@ -904,6 +984,19 @@ namespace PCTune
                 });
             };
             cWindow.Controls.Add(bUpdate);
+
+            SyncCodexUi();
+        }
+
+        void SyncCodexUi()
+        {
+            bool on = Cfg.CodexPingOn;
+            tgCodex.Init(on);
+            lCodexVal.Text = Cfg.CodexPingMinutes + " min";
+            lCodexEvery.Enabled = bCodexMinus.Enabled = bCodexPlus.Enabled = on;
+            lCodexVal.ForeColor = on ? Ui.Text : Ui.Dim;
+            lCodexState.ForeColor = on ? Ui.Green : Ui.Dim;
+            lCodexState.Text = on ? CodexPing.DescribeStatus() : "Auto-ping paused";
         }
 
         public override void Refresh2()
@@ -912,6 +1005,7 @@ namespace PCTune
             tgWidgetStart.Init(Cfg.ShowWidgetOnStartup);
             tgMainStart.Init(Cfg.OpenMainOnStartup);
             tgPerf.Init(Cfg.PerfOnStart);
+            SyncCodexUi();
             tgWidget.Init(Cfg.WidgetOn);
             tgCollapsed.Init(Cfg.WidgetCollapsed);
             tgClose.Init(Cfg.CloseToTray);
@@ -924,12 +1018,22 @@ namespace PCTune
             base.Relayout();
             int w = Host.ClientSize.Width;
             cStart.Bounds = new Rectangle(0, 0, w, Ui.D(284));
-            cWidget.Bounds = new Rectangle(0, Ui.D(298), w, Ui.D(210));
-            cWindow.Bounds = new Rectangle(0, Ui.D(522), w, Ui.D(262));
+            cCodex.Bounds = new Rectangle(0, Ui.D(298), w, Ui.D(168));
+            cWidget.Bounds = new Rectangle(0, Ui.D(480), w, Ui.D(210));
+            cWindow.Bounds = new Rectangle(0, Ui.D(704), w, Ui.D(262));
 
             Place(cStart, w, new int[] { 46, 106, 166, 226 });
+            Place(cCodex, w, new int[] { 46 });
             Place(cWidget, w, new int[] { 46, 106 });
             Place(cWindow, w, new int[] { 46, 106, 166 });
+
+            int cx = Ui.D(20) + lCodexEvery.PreferredWidth + Ui.D(14);
+            bCodexMinus.Location = new Point(cx, Ui.D(112));
+            lCodexVal.Location = new Point(cx + Ui.D(40), Ui.D(112));
+            bCodexPlus.Location = new Point(cx + Ui.D(126), Ui.D(112));
+            bCodexNow.Location = new Point(w - bCodexNow.Width - Ui.D(20), Ui.D(112));
+            int stLeft = bCodexPlus.Right + Ui.D(14);
+            lCodexState.Bounds = new Rectangle(stLeft, Ui.D(112), Math.Max(Ui.D(60), bCodexNow.Left - stLeft - Ui.D(12)), Ui.D(30));
 
             bResetPos.Location = new Point(Ui.D(20), Ui.D(164));
             bExitApp.Location = new Point(Ui.D(20), Ui.D(218));

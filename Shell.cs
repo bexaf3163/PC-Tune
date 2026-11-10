@@ -21,6 +21,7 @@ namespace PCTune
         readonly AdvancedPage advPage;
         readonly SettingsPage settingsPage;
         readonly RamSchedule ramSched;
+        readonly CodexSchedule codexSched;
         readonly PowerWatch watch;
         Widget widget;
         volatile bool busy;
@@ -110,6 +111,17 @@ namespace PCTune
                 Tray.Notify("Memory cleanup", string.Format("+{0:N0} MB available RAM ({1} background apps trimmed)", r.FreedMb, r.Touched));
             };
 
+            codexSched = new CodexSchedule(eng.Echo);
+            codexSched.Pinged += delegate
+            {
+                try
+                {
+                    if (IsHandleCreated)
+                        BeginInvoke((Action)delegate { if (currentView == 3) settingsPage.Refresh2(); });
+                }
+                catch { }
+            };
+
             log = new LogPage();
             advPage = new AdvancedPage(eng, Run, ramSched, log);
             homePage = new HomePage(eng, Run, Show, delegate { Show(2); advPage.SelectSub(3); });
@@ -117,7 +129,9 @@ namespace PCTune
             settingsPage = new SettingsPage(
                 delegate (bool on) { ShowWidget(on); },
                 delegate () { ResetWidgetPosition(); },
-                delegate () { Quit(); });
+                delegate () { Quit(); },
+                delegate () { ReloadCodexSchedule(); },
+                delegate () { RunAction(delegate { CodexPing.SendPingNow(eng.Echo, true); }, "Codex continuation ping sent"); });
 
             Add("", "Home", homePage);
             Add("", "Games", gamesPage);
@@ -223,6 +237,12 @@ namespace PCTune
             else if (views[currentView] == advPage) advPage.RefreshActive();
         }
 
+        public void ReloadCodexSchedule()
+        {
+            if (codexSched != null) codexSched.Reload();
+            if (currentView == 3 && settingsPage != null) settingsPage.Refresh2();
+        }
+
         public void ToggleWidget()
         {
             bool next = !IsWidgetVisible;
@@ -421,6 +441,7 @@ namespace PCTune
             {
                 if (watch != null) watch.Dispose();
                 if (ramSched != null) ramSched.Dispose();
+                if (codexSched != null) codexSched.Dispose();
                 if (widget != null && !widget.IsDisposed) { widget.Dispose(); }
                 Tray.Kill();
             }
