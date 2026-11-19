@@ -483,6 +483,11 @@ namespace PCTune
 
         public static string DescribeStatus()
         {
+            if (GameMode.Active || Ram.IsAnyGameRunning())
+                return "Paused during gaming session";
+            if (!IsCodexDesktopRunning())
+                return "Codex Desktop is closed";
+
             var st = InspectActiveSession();
             if (st == null) return "No Codex session detected";
 
@@ -491,6 +496,9 @@ namespace PCTune
 
             if (st.IsRunning)
                 return string.Format("Working: \"{0}\" (active {1}m ago)", st.Title, idleMin);
+
+            if (!st.IsUsageLimit && IsFatalError(st.ErrorMessage))
+                return "Paused: thread error (model/account)";
 
             if (st.IsUsageLimit && st.RateLimitResetUtc > nowUtc)
             {
@@ -515,9 +523,45 @@ namespace PCTune
             lock (sync) lastStatusText = s;
         }
 
+        static bool IsCodexDesktopRunning()
+        {
+            try
+            {
+                var ps = Process.GetProcessesByName("ChatGPT");
+                bool any = ps.Length > 0;
+                foreach (var p in ps) { try { p.Dispose(); } catch { } }
+                return any;
+            }
+            catch { return false; }
+        }
+
+        static bool IsFatalError(string err)
+        {
+            if (string.IsNullOrEmpty(err)) return false;
+            return err.IndexOf("model_not_found", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   err.IndexOf("invalid_request_error", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   err.IndexOf("not supported", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   err.IndexOf("authentication", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   err.IndexOf("unauthorized", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
         public static void CheckAndPingIfDue(Action<string> log)
         {
             if (!Cfg.CodexPingOn) return;
+
+            // Never wake Codex / Node.js stack during Game Mode or active gaming / GeForce NOW
+            if (GameMode.Active || Ram.IsAnyGameRunning())
+            {
+                SetStatus("Paused during gaming session");
+                return;
+            }
+
+            // Never cold-launch ChatGPT/Codex + Node.js MCP servers if the user closed Codex
+            if (!IsCodexDesktopRunning())
+            {
+                SetStatus("Codex Desktop is closed (standby)");
+                return;
+            }
 
             var st = InspectActiveSession();
             if (st == null)
@@ -534,6 +578,13 @@ namespace PCTune
 
             if (!st.IsStopped) return;
 
+            // Do not loop forever on permanent model/account errors
+            if (!st.IsUsageLimit && IsFatalError(st.ErrorMessage))
+            {
+                SetStatus("Stopped on fatal error (auto-ping paused)");
+                return;
+            }
+
             DateTime nowUtc = DateTime.UtcNow;
 
             // If stopped due to a usage limit with a known reset timestamp in the future, wait until reset time
@@ -548,8 +599,6 @@ namespace PCTune
             double stoppedMinutes = (nowUtc - st.LastActivityUtc).TotalMinutes;
             double sinceLastPingMinutes = (nowUtc - LastPingUtc).TotalMinutes;
 
-            // Wait at least 1 minute after task_complete (or intervalMin if not a rate-limit wakeup)
-            // and always enforce intervalMin cooldown between our own pings.
             if (sinceLastPingMinutes < intervalMin)
                 return;
 

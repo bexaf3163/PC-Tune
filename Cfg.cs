@@ -154,7 +154,7 @@ namespace PCTune
         // ---------------------------------------------------------- codex auto-ping
         public static bool CodexPingOn
         {
-            get { return Flag("CodexPingOn", true); }
+            get { return Flag("CodexPingOn", false); }
             set { SetFlag("CodexPingOn", value); }
         }
 
