@@ -252,8 +252,11 @@ namespace PCTune
         static void GfnProfileDiscovered()
         {
             var list = Games.List();
+            Assert(list.Count == 2, "Games.List() should contain only GeForce NOW and OSRS presets");
             GameInfo gfn = list.Find(g => g.Id == "gfn");
+            GameInfo osrs = list.Find(g => g.Id == "osrs");
             Assert(gfn != null, "GeForce NOW profile missing from Games.List()");
+            Assert(osrs != null, "OSRS profile missing from Games.List()");
             Assert(gfn.Proc == "GeForceNOWStreamer", "GeForce NOW primary process must be GeForceNOWStreamer");
             Assert(!Ram.MayClose("GeForceNOWStreamer"), "GeForceNOWStreamer must be protected from Ram.MayClose");
             Assert(!Ram.MayClose("GeForceNOW"), "GeForceNOW must be protected from Ram.MayClose");

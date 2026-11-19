@@ -11,18 +11,17 @@ namespace PCTune
     sealed class GameRowCard : Panel
     {
         public GameInfo Info;
-        readonly Label lTitle, lState, lPlan, lHard;
+        readonly Label lTitle, lState, lPlan;
         readonly Btn bOpt, bRestore, bLocate, bMeasure;
         public Action<GameInfo> OnMeasure;
         int baseHeight = Ui.D(88);
-        readonly Toggle tgHard;
-        readonly Action<GameInfo, bool> onOptimize;
+        readonly Action<GameInfo> onOptimize;
         readonly Action<GameInfo> onRestore;
         readonly Action<GameInfo> onLocate;
 
         public GameRowCard(
             GameInfo info,
-            Action<GameInfo, bool> optimize,
+            Action<GameInfo> optimize,
             Action<GameInfo> restore,
             Action<GameInfo> locate)
         {
@@ -65,20 +64,6 @@ namespace PCTune
             };
             Controls.Add(lPlan);
 
-            tgHard = new Toggle();
-            tgHard.Init(false);
-            Controls.Add(tgHard);
-
-            lHard = new Label
-            {
-                Text = "Cap visible characters to 50 for mass PvP / sieges",
-                Font = new Font(Ui.Tiny, 8.5f),
-                ForeColor = Ui.Dim,
-                AutoSize = true,
-                BackColor = Color.Transparent
-            };
-            Controls.Add(lHard);
-
             bOpt = new Btn
             {
                 Text2 = "Optimize",
@@ -87,7 +72,7 @@ namespace PCTune
                 Width = Ui.D(104),
                 Height = Ui.D(32)
             };
-            bOpt.Click += delegate { if (onOptimize != null) onOptimize(Info, tgHard.On); };
+            bOpt.Click += delegate { if (onOptimize != null) onOptimize(Info); };
             Controls.Add(bOpt);
 
             bRestore = new Btn
@@ -143,10 +128,6 @@ namespace PCTune
                     : g.Plan;
             }
 
-            bool showL2Cap = g.Id == "l2" && g.Found;
-            tgHard.Visible = showL2Cap;
-            lHard.Visible = showL2Cap;
-
             bOpt.Visible = g.Found;
             bOpt.Enabled = g.Found && !running;
             bOpt.Text2 = g.Done ? "Re-apply" : "Optimize";
@@ -162,7 +143,7 @@ namespace PCTune
             // Measure runs while RuneLite is open, so it stays enabled when the other buttons lock.
             bMeasure.Visible = g.Id == "osrs" && g.Found && Games.HasHd(g.Config);
 
-            baseHeight = Ui.D(showL2Cap ? 114 : 88);
+            baseHeight = Ui.D(88);
             Height = baseHeight;
             LayoutCard();
             Invalidate();
@@ -215,12 +196,6 @@ namespace PCTune
             int textW = wrap ? w - pad * 2 : Math.Max(Ui.D(160), rightX - pad);
             lState.Bounds = new Rectangle(pad, Ui.D(38), textW, Ui.D(18));
             lPlan.Bounds = new Rectangle(pad, Ui.D(58), w - pad * 2, Ui.D(20));
-
-            if (tgHard.Visible)
-            {
-                tgHard.Location = new Point(pad, Ui.D(84));
-                lHard.Location = new Point(pad + tgHard.Width + Ui.D(10), Ui.D(86));
-            }
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -370,14 +345,13 @@ namespace PCTune
             Refresh2();
         }
 
-        void ApplyGame(GameInfo g, bool hard)
+        void ApplyGame(GameInfo g)
         {
             if (g == null || !g.Found) return;
-            bool useHard = hard && g.Id == "l2";
             run(delegate
             {
                 bool wasRunning = Games.Running(g);
-                Games.Optimize(g, useHard, eng.Echo);
+                Games.Optimize(g, eng.Echo);
                 try
                 {
                     BeginInvoke((Action)delegate

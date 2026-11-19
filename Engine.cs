@@ -1248,7 +1248,7 @@ namespace PCTune
                 Title = "Optimizations for windowed games (DXGI Flip Model)",
                 Impact = "HIGH IMPACT",
                 HardwareNote = HwInfo.IsWin11_22H2Plus ? "Supported (Windows 11 Build " + HwInfo.OsBuild + ")" : "Requires Windows 11 22H2+",
-                Detail = "Upgrades legacy DirectX 10/11 windowed and borderless games (such as Lineage II and RuneLite) to use independent flip presentation, bypassing DWM composition latency.",
+                Detail = "Upgrades DirectX 10/11 windowed and borderless games (such as GeForce NOW and RuneLite) to use independent flip presentation, bypassing DWM composition latency.",
                 Check = () =>
                 {
                     if (!HwInfo.IsWin11_22H2Plus) return TweakState.Unsupported;

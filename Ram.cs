@@ -81,8 +81,7 @@ namespace PCTune
             "securityhealthsystray", "lsm", "dashost", "unsecapp", "widgets", "widgetservice",
             "powershell", "pwsh", "cmd", "bash", "windowsterminal", "openconsole",
             "pc-tune", "claude", "cowork-svc", "lightshot", "geforcenow", "geforcenowstreamer", "geforcenowcontainer",
-            "runelite", "jagexlauncher", "java", "javaw",
-            "lineageii", "l2", "rf-default", "rf_online", "rf_online_4g", "elementclient"
+            "runelite", "jagexlauncher", "java", "javaw"
         };
 
         public static readonly int MySession = Process.GetCurrentProcess().SessionId;
@@ -109,8 +108,7 @@ namespace PCTune
             var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 "geforcenow", "geforcenowstreamer", "geforcenowcontainer",
-                "runelite", "jagexlauncher", "java", "javaw",
-                "lineageii", "l2", "rf-default", "rf_online", "rf_online_4g", "elementclient"
+                "runelite", "jagexlauncher", "java", "javaw"
             };
             try
             {

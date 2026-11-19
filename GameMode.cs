@@ -71,8 +71,7 @@ namespace PCTune
         static readonly string[] Never =
         {
             "pc-tune", "geforcenow", "geforcenowstreamer", "geforcenowcontainer",
-            "runelite", "jagexlauncher", "lineageii", "l2",
-            "rf-default", "rf_online", "rf_online_4g", "elementclient",
+            "runelite", "jagexlauncher",
             "java", "javaw", "claude", "explorer", "dwm", "csrss", "winlogon",
             "services", "lsass", "smss", "wininit", "fontdrvhost", "sihost",
             "msmpeng", "nissrv", "securityhealthservice", "trustedinstaller",

@@ -334,11 +334,7 @@ namespace PCTune
         {
             var r = new List<GameInfo>();
             r.Add(Gfn());
-            r.Add(L2());
-            r.Add(Rf());
-            r.Add(Pw());
             r.Add(Osrs());
-            r.Add(Custom());
             return r;
         }
 
@@ -460,126 +456,6 @@ namespace PCTune
             return "";
         }
 
-        static GameInfo L2()
-        {
-            var g = new GameInfo { Id = "l2", Title = "Lineage II Essence", Proc = "LineageII" };
-            g.Exe = Pick(g.Id, new[]
-            {
-                @"C:\Games\LineageII Essence\system\Frost\LineageII.exe",
-                @"C:\Games\LineageII Essence EU\system\Frost\LineageII.exe"
-            });
-            if (g.Exe.Length == 0) return g;
-            g.Found = true;
-
-            string sys = Path.GetDirectoryName(Path.GetDirectoryName(g.Exe));
-            string altExe = Path.Combine(sys, "L2.exe");
-            if (File.Exists(altExe)) g.ExtraExes = new[] { altExe };
-            g.ExtraProcs = new[] { "L2" };
-
-            g.Config = Path.Combine(sys, "Option.ini");
-            if (!File.Exists(g.Config))
-            {
-                g.Done = HasLayer(g.Exe) && HasGpuPref(g.Exe);
-                g.Now = g.Done
-                    ? "Windows gaming flags applied (Option.ini will be tuned after first game launch)"
-                    : "Option.ini not created yet - Windows executable flags can still be applied";
-                g.Plan = g.Done
-                    ? "fullscreen optimizations off, DXGI flip-model & high-perf GPU set"
-                    : "set DXGI flip-model, high-perf GPU & IFEO priority on LineageII.exe";
-                return g;
-            }
-
-            string w = Get(g.Config, "GamePlayViewportX"), h = Get(g.Config, "GamePlayViewportY");
-            g.Now = w + "x" + h + ", textures " + Get(g.Config, "TextureDetail") +
-                    ", effects " + Get(g.Config, "EffectDetail") +
-                    ", characters " + Get(g.Config, "RENDERCHARACTERCOUNT");
-            g.Done = Get(g.Config, "YebisGlow") == "0" &&
-                     Eq(Get(g.Config, "YebisDOF"), "False") &&
-                     Eq(Get(g.Config, "YebisAntiAliasing"), "False") &&
-                     Eq(Get(g.Config, "PawnShadow"), "False") &&
-                     Get(g.Config, "TextureDetail") == "0" &&
-                     HasLayer(g.Exe) && HasGpuPref(g.Exe);
-            g.Plan = g.Done
-                ? "optimized (Yebis/shadows off, FSO off, DXGI flip-model & high-perf GPU set)"
-                : "turn off Yebis post-processing, shadows & detail; set DXGI flip-model & disable FSO";
-            return g;
-        }
-
-        static GameInfo Rf()
-        {
-            var g = new GameInfo
-            {
-                Id = "rf",
-                Title = "RF Online",
-                Proc = "rf-default",
-                ExtraProcs = new[] { "RF_Online", "RF_Online_4g" }
-            };
-            g.Exe = Pick(g.Id, new[] { @"C:\Games\RF-Default\rf-default.exe" });
-            if (g.Exe.Length == 0) return g;
-            g.Found = true;
-
-            string dir = Path.GetDirectoryName(g.Exe);
-            var extras = new List<string>();
-            foreach (string bin in new[] { "RF_Online.bin", "RF_Online_4g.bin" })
-            {
-                string p = Path.Combine(dir, bin);
-                if (File.Exists(p)) extras.Add(p);
-            }
-            g.ExtraExes = extras.ToArray();
-
-            g.Config = Path.Combine(dir, "R3Engine.ini");
-            if (!File.Exists(g.Config))
-            {
-                g.Done = HasLayer(g.Exe) && HasGpuPref(g.Exe);
-                g.Now = g.Done
-                    ? "Windows gaming flags applied (R3Engine.ini will be tuned after first game launch)"
-                    : "R3Engine.ini not created yet - Windows executable flags can still be applied";
-                g.Plan = g.Done
-                    ? "fullscreen optimizations off, DXGI flip-model & high-perf GPU set"
-                    : "set DXGI flip-model, high-perf GPU & IFEO priority on RF Online binaries";
-                return g;
-            }
-
-            g.Now = Get(g.Config, "ScreenXSize") + "x" + Get(g.Config, "ScreenYSize") +
-                    ", light " + Get(g.Config, "DynamicLight") +
-                    ", shadows " + Get(g.Config, "ShadowDetail") +
-                    ", glow " + Get(g.Config, "BboShasi");
-            g.Done = Get(g.Config, "TextureDetail") == "0" &&
-                     Get(g.Config, "ShadowDetail") == "0" &&
-                     Get(g.Config, "DynamicLight") == "1" &&
-                     Get(g.Config, "BboShasi") == "0" &&
-                     Eq(Get(g.Config, "bDetailTexture"), "FALSE") &&
-                     HasLayer(g.Exe) && HasGpuPref(g.Exe);
-            g.Plan = g.Done
-                ? "optimized (detail/shadows/glow off, raw mouse on, FSO & GPU preference set on all binaries)"
-                : "disable shadows, post-glow & mouse accel, dynamic light to 1, set FSO & GPU pref on RF_Online.bin";
-            return g;
-        }
-
-        static GameInfo Pw()
-        {
-            var g = new GameInfo { Id = "pw", Title = "Perfect World", Proc = "elementclient" };
-            g.Exe = Pick(g.Id, new[]
-            {
-                @"C:\Program Files (x86)\Perfect World Entertainment\Perfect World\element\elementclient.exe",
-                @"C:\Games\Perfect World\element\elementclient.exe",
-                @"C:\PWI\element\elementclient.exe"
-            });
-            if (g.Exe.Length == 0)
-            {
-                g.Now = "not found - specify elementclient.exe with the button below";
-                return g;
-            }
-            g.Found = true;
-            g.Config = "";
-            g.Done = HasLayer(g.Exe) && HasGpuPref(g.Exe);
-            g.Now = g.Done ? "client found (FSO disabled & GPU preference set)" : "client found";
-            g.Plan = g.Done
-                ? "already configured (fullscreen optimizations off, high-perf GPU preference set)"
-                : "disable fullscreen optimizations & set DXGI flip-model / high-perf GPU preference";
-            return g;
-        }
-
         static GameInfo Osrs()
         {
             var g = new GameInfo { Id = "osrs", Title = "Old School RuneScape (RuneLite + 117 HD)", Proc = "RuneLite" };
@@ -638,26 +514,6 @@ namespace PCTune
                 g.Done = false;
                 g.Plan = "Enable the 117 HD or GPU plugin inside RuneLite so hardware acceleration is active";
             }
-            return g;
-        }
-
-        static GameInfo Custom()
-        {
-            var g = new GameInfo { Id = "custom", Title = "Custom Game (.exe)" };
-            g.Exe = Pick(g.Id, new string[0]);
-            if (g.Exe.Length == 0)
-            {
-                g.Now = "specify any game .exe with the button below to apply Windows gaming optimizations";
-                return g;
-            }
-            g.Found = true;
-            g.Proc = Path.GetFileNameWithoutExtension(g.Exe);
-            g.Title = "Custom: " + Path.GetFileName(g.Exe);
-            g.Done = HasLayer(g.Exe) && HasGpuPref(g.Exe);
-            g.Now = g.Exe;
-            g.Plan = g.Done
-                ? "fullscreen optimizations disabled, high-performance GPU & DXGI flip-model enabled"
-                : "disable fullscreen optimizations, enable DXGI flip-model & high-performance GPU preference";
             return g;
         }
 
@@ -924,7 +780,7 @@ namespace PCTune
                    string.Equals(fn, "java.exe", StringComparison.OrdinalIgnoreCase);
         }
 
-        public static void Optimize(GameInfo g, bool hardL2, Action<string> log)
+        public static void Optimize(GameInfo g, Action<string> log)
         {
             if (!g.Found) return;
             if (Running(g))
@@ -957,8 +813,6 @@ namespace PCTune
                 else
                     log("  [!] Windows QoS policy could not be applied (administrator privileges required)");
             }
-            else if (g.Id == "l2") OptL2(g, hardL2, log);
-            else if (g.Id == "rf") OptRf(g, log);
             else if (g.Id == "osrs") OptOsrs(g, log);
             else log("  [+] Windows gaming flags applied");
         }
@@ -1070,7 +924,7 @@ namespace PCTune
         {
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
-                "geforcenowstreamer", "geforcenow", "runelite", "lineageii", "l2", "rf-default", "rf_online", "rf_online_4g", "elementclient"
+                "geforcenowstreamer", "geforcenow", "runelite"
             };
             foreach (var g in List())
             {
@@ -1107,45 +961,6 @@ namespace PCTune
                 }
                 catch { }
             }
-        }
-
-        static void OptL2(GameInfo g, bool hard, Action<string> log)
-        {
-            if (g.Config.Length == 0 || !File.Exists(g.Config))
-            {
-                log("  [ ] Option.ini not created yet (launch the game once); Windows executable flags applied");
-                return;
-            }
-            Backup(g.Config);
-            Pair(g.Config, "YebisGlow", "0", log);
-            Pair(g.Config, "YebisDOF", "False", log);
-            Pair(g.Config, "YebisAntiAliasing", "False", log);
-            Pair(g.Config, "PawnShadow", "False", log);
-            Pair(g.Config, "RenderDeco", "False", log);
-            Pair(g.Config, "TextureDetail", "0", log);
-            Pair(g.Config, "EffectDetail", "0", log);
-
-            if (hard)
-            {
-                Pair(g.Config, "RENDERCHARACTERCOUNT", "50", log);
-                log("  [!] character limit set to 50 - improves FPS in mass PvP/sieges");
-            }
-        }
-
-        static void OptRf(GameInfo g, Action<string> log)
-        {
-            if (g.Config.Length == 0 || !File.Exists(g.Config))
-            {
-                log("  [ ] R3Engine.ini not created yet (launch the game once); Windows executable flags applied");
-                return;
-            }
-            Backup(g.Config);
-            Pair(g.Config, "TextureDetail", "0", log);
-            Pair(g.Config, "ShadowDetail", "0", log);
-            Pair(g.Config, "bDetailTexture", "FALSE", log);
-            Pair(g.Config, "DynamicLight", "1", log);
-            Pair(g.Config, "BboShasi", "0", log);
-            Pair(g.Config, "bMouseAccelation", "FALSE", log);
         }
 
         // ------------------------------------------------ "In the car" profile
@@ -1459,43 +1274,6 @@ namespace PCTune
             foreach (string exe in AllExes(g))
                 if (HasLayer(exe) || HasGpuPref(exe) || (!SharedHostExe(exe) && HasPerfOptions(exe))) return true;
             return false;
-        }
-
-        // ---------------------------------------------------------- files
-        static void Backup(string file)
-        {
-            try
-            {
-                string bak = file + ".pctune.bak";
-                if (!File.Exists(bak)) File.Copy(file, bak);
-            }
-            catch { }
-        }
-
-        public static string Get(string file, string key)
-        {
-            try
-            {
-                string t = File.ReadAllText(file, Encoding.Default);
-                var m = Regex.Match(t, @"(?m)^\s*" + Regex.Escape(key) + @"\s*=\s*(.*)$");
-                return m.Success ? m.Groups[1].Value.Trim() : "?";
-            }
-            catch { return "?"; }
-        }
-
-        static void Pair(string file, string key, string val, Action<string> log)
-        {
-            try
-            {
-                string t = File.ReadAllText(file, Encoding.Default);
-                string pat = @"(?m)^(\s*" + Regex.Escape(key) + @"\s*=).*$";
-                if (!Regex.IsMatch(t, pat)) return;
-                string was = Get(file, key);
-                if (string.Equals(was, val, StringComparison.OrdinalIgnoreCase)) return;
-                File.WriteAllText(file, Regex.Replace(t, pat, "${1}" + val), Encoding.Default);
-                log("  [+] " + key + ": " + was + " -> " + val);
-            }
-            catch (Exception ex) { log("  [x] " + key + ": " + ex.Message); }
         }
 
         // ---------------------------------------------------------- properties
