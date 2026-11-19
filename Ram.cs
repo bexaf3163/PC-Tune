@@ -80,7 +80,8 @@ namespace PCTune
             "audiodg", "spoolsv", "wmiprvse", "wudfhost", "smartscreen", "sgrmbroker",
             "securityhealthsystray", "lsm", "dashost", "unsecapp", "widgets", "widgetservice",
             "powershell", "pwsh", "cmd", "bash", "windowsterminal", "openconsole",
-            "pc-tune", "claude", "cowork-svc", "lightshot", "runelite", "jagexlauncher", "java", "javaw",
+            "pc-tune", "claude", "cowork-svc", "lightshot", "geforcenow", "geforcenowstreamer", "geforcenowcontainer",
+            "runelite", "jagexlauncher", "java", "javaw",
             "lineageii", "l2", "rf-default", "rf_online", "rf_online_4g", "elementclient"
         };
 
@@ -107,6 +108,7 @@ namespace PCTune
         {
             var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
+                "geforcenow", "geforcenowstreamer", "geforcenowcontainer",
                 "runelite", "jagexlauncher", "java", "javaw",
                 "lineageii", "l2", "rf-default", "rf_online", "rf_online_4g", "elementclient"
             };
@@ -115,6 +117,9 @@ namespace PCTune
                 foreach (var g in Games.List())
                 {
                     if (!string.IsNullOrEmpty(g.Proc)) set.Add(g.Proc);
+                    if (g.ExtraProcs != null)
+                        foreach (string ep in g.ExtraProcs)
+                            if (!string.IsNullOrEmpty(ep)) set.Add(ep);
                     if (!string.IsNullOrEmpty(g.Exe))
                         set.Add(Path.GetFileNameWithoutExtension(g.Exe));
                 }

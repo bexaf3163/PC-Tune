@@ -31,6 +31,7 @@ namespace PCTune
             Run("side-by-side ultrawide window is preserved while oversized canvas is clamped", FitWindowPreservesSideBySide);
             Run("117 HD plan tunes map chunks and worker CPU cap cleanly", HdPlanValidatesCleanly);
             Run("Codex auto-ping inspects active rollout and parses state cleanly", CodexInspectWorksCleanly);
+            Run("GeForce NOW cloud gaming profile is discovered and protected", GfnProfileDiscovered);
             Console.WriteLine(failed == 0 ? "ALL TESTS PASSED" : failed + " TEST(S) FAILED");
             return failed == 0 ? 0 : 1;
         }
@@ -246,6 +247,16 @@ namespace PCTune
                 Assert(!string.IsNullOrEmpty(st.ThreadId), "Active Codex session must have a valid ThreadId");
                 Assert(st.IsRunning != st.IsStopped, "Session must be either running or stopped");
             }
+        }
+
+        static void GfnProfileDiscovered()
+        {
+            var list = Games.List();
+            GameInfo gfn = list.Find(g => g.Id == "gfn");
+            Assert(gfn != null, "GeForce NOW profile missing from Games.List()");
+            Assert(gfn.Proc == "GeForceNOWStreamer", "GeForce NOW primary process must be GeForceNOWStreamer");
+            Assert(!Ram.MayClose("GeForceNOWStreamer"), "GeForceNOWStreamer must be protected from Ram.MayClose");
+            Assert(!Ram.MayClose("GeForceNOW"), "GeForceNOW must be protected from Ram.MayClose");
         }
     }
 }

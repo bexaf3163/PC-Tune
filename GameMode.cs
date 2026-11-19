@@ -26,6 +26,8 @@ namespace PCTune
             "WSearch",          // Windows Search indexer
             "MapsBroker",       // Downloaded Maps Manager
             "DoSvc",            // Delivery Optimization
+            "BITS",             // Background Intelligent Transfer Service (prevents cloud stream bufferbloat)
+            "wuauserv",         // Windows Update (paused only during Game Mode; restored on exit)
             "PhoneSvc", "WpnService", "RetailDemo"
         };
 
@@ -68,7 +70,8 @@ namespace PCTune
         // Processes that must never be closed by GameMode.
         static readonly string[] Never =
         {
-            "pc-tune", "runelite", "jagexlauncher", "lineageii", "l2",
+            "pc-tune", "geforcenow", "geforcenowstreamer", "geforcenowcontainer",
+            "runelite", "jagexlauncher", "lineageii", "l2",
             "rf-default", "rf_online", "rf_online_4g", "elementclient",
             "java", "javaw", "claude", "explorer", "dwm", "csrss", "winlogon",
             "services", "lsass", "smss", "wininit", "fontdrvhost", "sihost",
@@ -84,6 +87,9 @@ namespace PCTune
                 foreach (var g in Games.List())
                 {
                     if (g.Proc.Length > 0) r.Add(g.Proc.ToLowerInvariant());
+                    if (g.ExtraProcs != null)
+                        foreach (string ep in g.ExtraProcs)
+                            if (!string.IsNullOrEmpty(ep)) r.Add(ep.ToLowerInvariant());
                     if (g.Exe.Length > 0)
                         r.Add(Path.GetFileNameWithoutExtension(g.Exe).ToLowerInvariant());
                 }

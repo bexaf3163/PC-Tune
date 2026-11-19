@@ -333,12 +333,98 @@ namespace PCTune
         public static List<GameInfo> List()
         {
             var r = new List<GameInfo>();
+            r.Add(Gfn());
             r.Add(L2());
             r.Add(Rf());
             r.Add(Pw());
             r.Add(Osrs());
             r.Add(Custom());
             return r;
+        }
+
+        const string GfnQosKey = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\QoS\PC-Tune GeForce NOW";
+
+        static bool HasGfnQos()
+        {
+            try
+            {
+                using (var k = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Policies\Microsoft\Windows\QoS\PC-Tune GeForce NOW"))
+                    return k != null && string.Equals((k.GetValue("DSCP Value") ?? "").ToString(), "46", StringComparison.Ordinal);
+            }
+            catch { return false; }
+        }
+
+        static bool ApplyGfnQos(bool enable)
+        {
+            try
+            {
+                if (enable)
+                {
+                    bool ok = true;
+                    ok &= Sys.SetRegVerify(GfnQosKey, "Version", "1.0", RegistryValueKind.String);
+                    ok &= Sys.SetRegVerify(GfnQosKey, "Application Name", "GeForceNOWStreamer.exe", RegistryValueKind.String);
+                    ok &= Sys.SetRegVerify(GfnQosKey, "Protocol", "*", RegistryValueKind.String);
+                    ok &= Sys.SetRegVerify(GfnQosKey, "Local Port", "*", RegistryValueKind.String);
+                    ok &= Sys.SetRegVerify(GfnQosKey, "Local IP", "*", RegistryValueKind.String);
+                    ok &= Sys.SetRegVerify(GfnQosKey, "Local IP Prefix Length", "*", RegistryValueKind.String);
+                    ok &= Sys.SetRegVerify(GfnQosKey, "Remote Port", "*", RegistryValueKind.String);
+                    ok &= Sys.SetRegVerify(GfnQosKey, "Remote IP", "*", RegistryValueKind.String);
+                    ok &= Sys.SetRegVerify(GfnQosKey, "Remote IP Prefix Length", "*", RegistryValueKind.String);
+                    ok &= Sys.SetRegVerify(GfnQosKey, "DSCP Value", "46", RegistryValueKind.String);
+                    ok &= Sys.SetRegVerify(GfnQosKey, "Throttle Rate", "-1", RegistryValueKind.String);
+                    // Also allow non-admin QoS packet tagging in Tcpip\QoS
+                    Sys.SetRegVerify(@"HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\QoS", "Do not use NLA", "1", RegistryValueKind.String);
+                    return ok;
+                }
+                else
+                {
+                    return Sys.DelRegSubKeyTree(@"HKLM\SOFTWARE\Policies\Microsoft\Windows\QoS", "PC-Tune GeForce NOW");
+                }
+            }
+            catch { return false; }
+        }
+
+        static GameInfo Gfn()
+        {
+            var g = new GameInfo
+            {
+                Id = "gfn",
+                Title = "NVIDIA GeForce NOW (Cloud Gaming)",
+                Proc = "GeForceNOWStreamer",
+                ExtraProcs = new[] { "GeForceNOW", "GeForceNOWContainer" }
+            };
+            g.Exe = Pick(g.Id, new[]
+            {
+                Path.Combine(Local, @"NVIDIA Corporation\GeForceNOW\CEF\GeForceNOWStreamer.exe"),
+                Path.Combine(Local, @"NVIDIA Corporation\GeForceNOW\CEF\GeForceNOW.exe")
+            });
+            if (g.Exe.Length == 0)
+            {
+                g.Plan = "Cloud gaming client not installed (install GeForce NOW or locate GeForceNOWStreamer.exe)";
+                return g;
+            }
+            g.Found = true;
+
+            string dir = Path.GetDirectoryName(g.Exe);
+            var extras = new List<string>();
+            foreach (string bin in new[] { "GeForceNOW.exe", "GeForceNOWStreamer.exe", "GeForceNOWContainer.exe" })
+            {
+                string p = Path.Combine(dir, bin);
+                if (File.Exists(p) && !Eq(p, g.Exe)) extras.Add(p);
+            }
+            g.ExtraExes = extras.ToArray();
+
+            bool gpuOk = HasGpuPref(g.Exe);
+            bool prioOk = HasPerfOptions(g.Exe);
+            bool qosOk = HasGfnQos();
+            g.Done = gpuOk && prioOk && qosOk;
+            g.Now = g.Done
+                ? "High-perf GPU decode, DXGI flip-model, High CPU priority & DSCP 46 QoS active"
+                : "Cloud stream decoder ready for optimization";
+            g.Plan = g.Done
+                ? "optimized (GeForceNOWStreamer High priority, DXGI flip-model, QoS DSCP 46 Expedited Forwarding)"
+                : "set High-perf GPU decode & DXGI flip-model, High CPU priority, and DSCP 46 QoS for low-jitter streaming";
+            return g;
         }
 
         static string Saved(string id)
@@ -850,7 +936,7 @@ namespace PCTune
 
             foreach (string exe in AllExes(g))
             {
-                if (Layer(exe))
+                if (g.Id != "gfn" && Layer(exe))
                     log("  [+] fullscreen optimizations disabled: " + Path.GetFileName(exe));
                 if (GpuPref(exe))
                     log("  [+] high-performance GPU & DXGI swapchain upgrade enabled: " + Path.GetFileName(exe));
@@ -864,7 +950,14 @@ namespace PCTune
                     log("  [+] " + (g.Id == "osrs" ? "Above Normal" : "High") + " CPU / RAM page priority registered in IFEO: " + Path.GetFileName(exe));
             }
 
-            if (g.Id == "l2") OptL2(g, hardL2, log);
+            if (g.Id == "gfn")
+            {
+                if (ApplyGfnQos(true))
+                    log("  [+] Windows QoS policy applied: GeForceNOWStreamer.exe -> DSCP 46 (Expedited Forwarding)");
+                else
+                    log("  [!] Windows QoS policy could not be applied (administrator privileges required)");
+            }
+            else if (g.Id == "l2") OptL2(g, hardL2, log);
             else if (g.Id == "rf") OptRf(g, log);
             else if (g.Id == "osrs") OptOsrs(g, log);
             else log("  [+] Windows gaming flags applied");
@@ -977,7 +1070,7 @@ namespace PCTune
         {
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
-                "runelite", "lineageii", "l2", "rf-default", "rf_online", "rf_online_4g", "elementclient"
+                "geforcenowstreamer", "geforcenow", "runelite", "lineageii", "l2", "rf-default", "rf_online", "rf_online_4g", "elementclient"
             };
             foreach (var g in List())
             {
@@ -1343,11 +1436,24 @@ namespace PCTune
                 }
             }
             catch { }
+            try
+            {
+                if (g.Id == "gfn" && HasGfnQos())
+                {
+                    if (ApplyGfnQos(false) && !HasGfnQos())
+                    {
+                        log("  [+] Windows QoS policy removed: PC-Tune GeForce NOW");
+                        any = true;
+                    }
+                }
+            }
+            catch { }
             if (!any) log("  [ ] nothing to restore");
         }
 
         public static bool HasBackup(GameInfo g)
         {
+            if (g.Id == "gfn" && HasGfnQos()) return true;
             if (g.Id == "osrs" && g.Config.Length > 0 && File.Exists(KeysFile(g.Config))) return true;
             if (g.Id != "osrs" && g.Config.Length > 0 && File.Exists(g.Config + ".pctune.bak")) return true;
             foreach (string exe in AllExes(g))

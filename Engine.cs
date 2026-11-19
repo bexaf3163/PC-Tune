@@ -1078,10 +1078,10 @@ namespace PCTune
                     foreach (string g in guids)
                     {
                         string p = @"HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\" + g;
-                        if (RegInt(p, "TcpAckFrequency", 0) == 1 && RegInt(p, "TCPNoDelay", 0) == 1)
-                            return TweakState.Applied;
+                        if (RegInt(p, "TcpAckFrequency", 0) != 1 || RegInt(p, "TCPNoDelay", 0) != 1)
+                            return TweakState.NotApplied;
                     }
-                    return TweakState.NotApplied;
+                    return TweakState.Applied;
                 },
                 Apply = l =>
                 {
@@ -1114,20 +1114,52 @@ namespace PCTune
             tweaks.Add(new Tweak
             {
                 Group = G1,
-                Title = "Network adapter low-latency mode (Wi-Fi MIMO SMPS & Packet Coalescing off)",
+                Title = "Network adapter low-latency mode (Ethernet & Wi-Fi cloud gaming)",
                 Impact = "HIGH IMPACT",
-                Detail = "Disables Wi-Fi Packet Coalescing (*PacketCoalescing=0) and Spatial Multiplexing Power Save (MIMOPowerSaveMode=3 / No SMPS), plus Ethernet Energy-Efficient Ethernet (EEE) and Ultra Low Power mode, eliminating 2-15 ms radio wake and packet batching jitter.",
+                Detail = "Disables Ethernet Interrupt Moderation, Flow Control, PCIe Link Power Saving (K1), EEE, Ultra Low Power Mode, and raises Receive/Transmit Buffers to 1024 for bursty high-bitrate UDP video streams (GeForce NOW), while disabling Wi-Fi Packet Coalescing and MIMO SMPS.",
                 Check = () => CheckNicLowLatency(),
                 Apply = l =>
                 {
                     int n = ApplyNicLowLatency(true);
-                    if (n > 0) Ok("Verified low-latency driver parameters on " + n + " physical network adapter(s)");
+                    if (n > 0) Ok("Verified low-latency Ethernet/Wi-Fi driver parameters on " + n + " physical adapter(s)");
                     else Warn("No compatible Intel/Realtek physical network adapter subkeys found");
                 },
                 Revert = l =>
                 {
                     int n = ApplyNicLowLatency(false);
-                    Ok("Restored default network adapter power-saving parameters (" + n + " adapter(s))");
+                    Ok("Restored default network adapter parameters (" + n + " adapter(s))");
+                }
+            });
+
+            tweaks.Add(new Tweak
+            {
+                Group = G1,
+                Title = "GeForce NOW QoS priority (DSCP 46 Expedited Forwarding)",
+                Impact = "HIGH IMPACT",
+                Detail = "Registers a Windows Policy-based QoS rule (DSCP 46 EF, unrestricted throttle) for GeForceNOWStreamer.exe and enables Tcpip\\QoS non-NLA tagging so cloud game input and video packets preempt background traffic.",
+                Check = () => RegStr(@"HKLM\SOFTWARE\Policies\Microsoft\Windows\QoS\PC-Tune GeForce NOW", "DSCP Value", "") == "46"
+                              ? TweakState.Applied : TweakState.NotApplied,
+                Apply = l =>
+                {
+                    const string q = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\QoS\PC-Tune GeForce NOW";
+                    Sys.SetRegVerify(q, "Version", "1.0", RegistryValueKind.String);
+                    Sys.SetRegVerify(q, "Application Name", "GeForceNOWStreamer.exe", RegistryValueKind.String);
+                    Sys.SetRegVerify(q, "Protocol", "*", RegistryValueKind.String);
+                    Sys.SetRegVerify(q, "Local Port", "*", RegistryValueKind.String);
+                    Sys.SetRegVerify(q, "Local IP", "*", RegistryValueKind.String);
+                    Sys.SetRegVerify(q, "Local IP Prefix Length", "*", RegistryValueKind.String);
+                    Sys.SetRegVerify(q, "Remote Port", "*", RegistryValueKind.String);
+                    Sys.SetRegVerify(q, "Remote IP", "*", RegistryValueKind.String);
+                    Sys.SetRegVerify(q, "Remote IP Prefix Length", "*", RegistryValueKind.String);
+                    Sys.SetRegVerify(q, "DSCP Value", "46", RegistryValueKind.String);
+                    Sys.SetRegVerify(q, "Throttle Rate", "-1", RegistryValueKind.String);
+                    Sys.SetRegVerify(@"HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\QoS", "Do not use NLA", "1", RegistryValueKind.String);
+                    Ok("Verified GeForce NOW QoS DSCP 46 policy (GeForceNOWStreamer.exe)");
+                },
+                Revert = l =>
+                {
+                    Sys.DelRegSubKeyTree(@"HKLM\SOFTWARE\Policies\Microsoft\Windows\QoS", "PC-Tune GeForce NOW");
+                    Ok("Removed GeForce NOW QoS DSCP 46 policy");
                 }
             });
 
@@ -1759,37 +1791,40 @@ namespace PCTune
             return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
         }
 
-        // Returns active physical Ethernet/Wi-Fi adapters with an IPv4 gateway,
-        // falling back to any operational non-loopback non-virtual adapter.
+        static bool IsVirtualNic(string desc)
+        {
+            if (string.IsNullOrEmpty(desc)) return true;
+            string d = desc.ToLowerInvariant();
+            return d.Contains("virtual") || d.Contains("hyper-v") || d.Contains("vmware") ||
+                   d.Contains("tap-") || d.Contains("bluetooth") || d.Contains("wan miniport") ||
+                   d.Contains("loopback") || d.Contains("kernel debug");
+        }
+
+        // Returns physical Ethernet/Wi-Fi interface GUIDs (active or plugged-in earlier) so Nagle/TCP tweaks
+        // cover wired Ethernet even when currently connected over Wi-Fi.
         static List<string> ActiveIfGuids()
         {
-            var primary = new List<string>();
-            var fallback = new List<string>();
+            var result = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             try
             {
                 foreach (var ni in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
                 {
-                    if (ni.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up) continue;
                     if (ni.NetworkInterfaceType == System.Net.NetworkInformation.NetworkInterfaceType.Loopback) continue;
-                    string desc = (ni.Description ?? "").ToLowerInvariant();
-                    if (desc.Contains("virtual") || desc.Contains("hyper-v") || desc.Contains("vmware") || desc.Contains("tap-"))
+                    if (IsVirtualNic(ni.Description)) continue;
+                    bool isWiredOrWifi =
+                        ni.NetworkInterfaceType == System.Net.NetworkInformation.NetworkInterfaceType.Ethernet ||
+                        ni.NetworkInterfaceType == System.Net.NetworkInformation.NetworkInterfaceType.GigabitEthernet ||
+                        ni.NetworkInterfaceType == System.Net.NetworkInformation.NetworkInterfaceType.FastEthernetT ||
+                        ni.NetworkInterfaceType == System.Net.NetworkInformation.NetworkInterfaceType.Wireless80211;
+                    if (!isWiredOrWifi && ni.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up)
                         continue;
-
-                    bool hasGw = false;
-                    try
-                    {
-                        var ip = ni.GetIPProperties();
-                        if (ip != null && ip.GatewayAddresses != null && ip.GatewayAddresses.Count > 0)
-                            hasGw = true;
-                    }
-                    catch { }
-
-                    if (hasGw) primary.Add(ni.Id);
-                    else fallback.Add(ni.Id);
+                    if (!string.IsNullOrEmpty(ni.Id) && seen.Add(ni.Id))
+                        result.Add(ni.Id);
                 }
             }
             catch { }
-            return primary.Count > 0 ? primary : fallback;
+            return result;
         }
 
         const string NagleBackupKey = @"Software\PCTune\NagleInterfaces";
@@ -1843,7 +1878,7 @@ namespace PCTune
                         {
                             if (k == null) continue;
                             string desc = (k.GetValue("DriverDesc") ?? "").ToString();
-                            if (desc.IndexOf("Virtual", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                            if (IsVirtualNic(desc)) continue;
                             if (k.GetValue("*PacketCoalescing") != null)
                             {
                                 foundAny = true;
@@ -1858,6 +1893,33 @@ namespace PCTune
                             {
                                 foundAny = true;
                                 if ((k.GetValue("EEELinkAdvertisement") ?? "").ToString() != "0") allApplied = false;
+                            }
+                            if (k.GetValue("*InterruptModeration") != null)
+                            {
+                                foundAny = true;
+                                if ((k.GetValue("*InterruptModeration") ?? "").ToString() != "0") allApplied = false;
+                            }
+                            if (k.GetValue("*FlowControl") != null)
+                            {
+                                foundAny = true;
+                                if ((k.GetValue("*FlowControl") ?? "").ToString() != "0") allApplied = false;
+                            }
+                            if (k.GetValue("EnableK1") != null)
+                            {
+                                foundAny = true;
+                                if ((k.GetValue("EnableK1") ?? "").ToString() != "0") allApplied = false;
+                            }
+                            if (k.GetValue("*ReceiveBuffers") != null)
+                            {
+                                foundAny = true;
+                                int rv;
+                                if (!int.TryParse((k.GetValue("*ReceiveBuffers") ?? "").ToString(), out rv) || rv < 1024) allApplied = false;
+                            }
+                            if (k.GetValue("*TransmitBuffers") != null)
+                            {
+                                foundAny = true;
+                                int tv;
+                                if (!int.TryParse((k.GetValue("*TransmitBuffers") ?? "").ToString(), out tv) || tv < 1024) allApplied = false;
                             }
                         }
                     }
@@ -1883,7 +1945,7 @@ namespace PCTune
                         {
                             if (k == null) continue;
                             string desc = (k.GetValue("DriverDesc") ?? "").ToString();
-                            if (desc.IndexOf("Virtual", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                            if (IsVirtualNic(desc)) continue;
                             bool hit = false;
                             if (k.GetValue("*PacketCoalescing") != null)
                             {
@@ -1908,6 +1970,36 @@ namespace PCTune
                             if (k.GetValue("*SelectiveSuspend") != null)
                             {
                                 Sys.SetRegVerify(fullPath, "*SelectiveSuspend", enable ? "0" : "1", RegistryValueKind.String);
+                                hit = true;
+                            }
+                            if (k.GetValue("*InterruptModeration") != null)
+                            {
+                                Sys.SetRegVerify(fullPath, "*InterruptModeration", enable ? "0" : "1", RegistryValueKind.String);
+                                hit = true;
+                            }
+                            if (k.GetValue("*FlowControl") != null)
+                            {
+                                Sys.SetRegVerify(fullPath, "*FlowControl", enable ? "0" : "3", RegistryValueKind.String);
+                                hit = true;
+                            }
+                            if (k.GetValue("EnableK1") != null)
+                            {
+                                Sys.SetRegVerify(fullPath, "EnableK1", enable ? "0" : "1", RegistryValueKind.String);
+                                hit = true;
+                            }
+                            if (k.GetValue("ReduceSpeedOnPowerDown") != null)
+                            {
+                                Sys.SetRegVerify(fullPath, "ReduceSpeedOnPowerDown", enable ? "0" : "1", RegistryValueKind.String);
+                                hit = true;
+                            }
+                            if (k.GetValue("*ReceiveBuffers") != null)
+                            {
+                                Sys.SetRegVerify(fullPath, "*ReceiveBuffers", enable ? "1024" : "256", RegistryValueKind.String);
+                                hit = true;
+                            }
+                            if (k.GetValue("*TransmitBuffers") != null)
+                            {
+                                Sys.SetRegVerify(fullPath, "*TransmitBuffers", enable ? "1024" : "512", RegistryValueKind.String);
                                 hit = true;
                             }
                             if (hit) touched++;
