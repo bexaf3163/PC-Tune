@@ -142,13 +142,33 @@ namespace PCTune
             return Eq(v1, exp1) && Eq(v2, exp2) ? TweakState.Applied : TweakState.NotApplied;
         }
 
-        // Ensures AC brightness and DC disk timeouts are not left stuck at Eco values
-        // when switching back to AC performance/gaming/balanced modes.
+        // Ensures AC/DC brightness and DC CPU/GPU/disk throttles are not left stuck at Economy/Car caps
+        // when switching back to Max Speed, Gaming, Competitive, or Balanced modes.
         void EnsureNormalBrightnessAndDcDefaults(bool backup = true)
         {
             int acBr = Sys.PowIdx(Sys.SUB_VIDEO, Sys.BRIGHTNESS, true);
             if (acBr > 0 && acBr <= 50)
                 Sys.Ac(Sys.SUB_VIDEO, Sys.BRIGHTNESS, 100, backup);
+
+            int dcBr = Sys.PowIdx(Sys.SUB_VIDEO, Sys.BRIGHTNESS, false);
+            if (dcBr > 0 && dcBr <= 50)
+                Sys.Dc(Sys.SUB_VIDEO, Sys.BRIGHTNESS, 80, backup);
+
+            int dcMax = Sys.PowIdx(Sys.SUB_PROC, Sys.PROCMAX, false);
+            if (dcMax > 0 && dcMax < 100)
+                Sys.Dc(Sys.SUB_PROC, Sys.PROCMAX, 100, backup);
+
+            int dcEpp = Sys.PowIdx(Sys.SUB_PROC, Sys.PERFEPP, false);
+            if (dcEpp > 60)
+                Sys.Dc(Sys.SUB_PROC, Sys.PERFEPP, 60, backup);
+
+            int dcBoost = Sys.PowIdx(Sys.SUB_PROC, Sys.BOOST, false);
+            if (dcBoost == 0)
+                Sys.Dc(Sys.SUB_PROC, Sys.BOOST, 1, backup);
+
+            int dcCores = Sys.PowIdx(Sys.SUB_PROC, Sys.CPMINCORES, false);
+            if (dcCores > 0 && dcCores < 25)
+                Sys.Dc(Sys.SUB_PROC, Sys.CPMINCORES, 50, backup);
 
             int dcDisk = Sys.PowIdx(Sys.SUB_DISK, Sys.DISKIDLE, false);
             if (dcDisk > 0 && dcDisk <= 30)
