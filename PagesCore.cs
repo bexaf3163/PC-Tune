@@ -306,8 +306,6 @@ namespace PCTune
 
             tick = new Timer { Interval = 2000 };
             tick.Tick += delegate { if (Visible) Sample(); };
-            Sample();
-            tick.Start();
         }
 
         protected override void OnVisibleChanged(EventArgs e)
@@ -491,7 +489,7 @@ namespace PCTune
 
             tabBar.Resize += delegate { LayoutTabs(); };
             LayoutTabs();
-            SelectSub(0);
+            SelectSub(0, false);
         }
 
         void AddSub(string title, Page p)
@@ -537,7 +535,7 @@ namespace PCTune
             if (tabBar.Height != neededH) tabBar.Height = neededH;
         }
 
-        public void SelectSub(int idx)
+        public void SelectSub(int idx, bool refreshNow = true)
         {
             if (idx < 0 || idx >= subPages.Count) return;
             activeIdx = idx;
@@ -548,7 +546,7 @@ namespace PCTune
                 tabs[i].Invalidate();
                 subPages[i].Visible = sel;
             }
-            subPages[idx].Refresh2();
+            if (refreshNow) subPages[idx].Refresh2();
             subPages[idx].BringToFront();
         }
 

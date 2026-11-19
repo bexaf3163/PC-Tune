@@ -162,7 +162,7 @@ namespace PCTune
         public PowerWatch()
         {
             lastOnBattery = Power.OnBattery();
-            poll = new Timer { Interval = 2000 };
+            poll = new Timer { Interval = 10000 };
             poll.Tick += (s, e) => Check();
             poll.Start();
             Microsoft.Win32.SystemEvents.PowerModeChanged += OnPowerMode;

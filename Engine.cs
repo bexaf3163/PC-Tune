@@ -106,6 +106,7 @@ namespace PCTune
                     "BlockBootUntilChasIntrusionClr", "ChasIntrusion", "TelemetryAccessLvl",
                     "SmmSecurityMitigation", "CStatesCtrl", "Virtualization", "PrimaryBattChargeCfg"
                 };
+                Sys.BiosGetBatch(keys);
                 foreach (string k in keys)
                 {
                     string v = Sys.BiosGet(k);

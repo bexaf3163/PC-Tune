@@ -146,7 +146,8 @@ namespace PCTune
 
             side.Resize += delegate { LayoutNav(); };
             LayoutNav();
-            Show(0);
+            if (!isStartup || Cfg.OpenMainOnStartup) Show(0);
+            else { currentView = 0; nav[0].Selected = true; views[0].Visible = true; }
 
             // ---- Power state watcher
             watch = new PowerWatch();
@@ -171,6 +172,7 @@ namespace PCTune
                 System.Threading.ThreadPool.QueueUserWorkItem(delegate { Games.SyncCar(eng.Echo); });
             };
             carSync.Start();
+            Disposed += delegate { try { carSync.Stop(); carSync.Dispose(); } catch { } };
 
             // Show floating widget according to startup vs normal launch preferences
             bool wantWidget = isStartup ? (Cfg.ShowWidgetOnStartup && Cfg.WidgetOn) : Cfg.WidgetOn;

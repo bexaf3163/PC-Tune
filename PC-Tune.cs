@@ -65,7 +65,10 @@ namespace PCTune
         // Read-only commands are not logged to avoid cluttering the log file during polling.
         static bool ReadOnly(string exe, string args)
         {
+            string e = Path.GetFileNameWithoutExtension(exe ?? "").ToLowerInvariant();
             string a = (args ?? "").TrimStart().ToLowerInvariant();
+            if (e == "cctk" && !a.Contains("=")) return true;
+            if (e == "powershell" && a.Contains("get-mmagent")) return true;
             return a.StartsWith("/list") || a.StartsWith("/q") || a.StartsWith("/getactivescheme")
                 || a.StartsWith("/a") || a.StartsWith("qc ") || a.StartsWith("query")
                 || a.StartsWith("-list") || a.StartsWith("behavior query");
@@ -565,6 +568,35 @@ namespace PCTune
             RunAdmin(CCTK, "--" + opt + "=" + val);
             string now = BiosGet(opt, true);
             return string.Equals(now, val, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static void BiosGetBatch(string[] opts)
+        {
+            if (!HasBios || opts == null || opts.Length == 0) return;
+            var args = new StringBuilder();
+            foreach (string opt in opts)
+            {
+                if (string.IsNullOrEmpty(opt)) continue;
+                if (args.Length > 0) args.Append(' ');
+                args.Append("--").Append(opt);
+            }
+            string s = Run(CCTK, args.ToString());
+            lock (biosCache)
+            {
+                foreach (string opt in opts)
+                    if (!biosCache.ContainsKey(opt)) biosCache[opt] = "";
+                foreach (string raw in s.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    string line = raw.Trim();
+                    int eq = line.IndexOf('=');
+                    if (eq <= 0) continue;
+                    string k = line.Substring(0, eq).Trim();
+                    string v = line.Substring(eq + 1).Trim();
+                    foreach (string opt in opts)
+                        if (string.Equals(k, opt, StringComparison.OrdinalIgnoreCase))
+                            biosCache[opt] = v;
+                }
+            }
         }
 
         public static void Unhide(string sub, string setting)
